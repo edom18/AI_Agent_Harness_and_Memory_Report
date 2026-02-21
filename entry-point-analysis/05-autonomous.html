@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>自律的行動システム - OpenClaw解析</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <nav class="breadcrumb">
+      <a href="index.html">トップ</a> &gt; 自律的行動システム
+    </nav>
+
+    <header>
+      <h1>5. 自律的行動システム</h1>
+      <p class="subtitle">Cron、ハートビート、Auto-Reply、フック、サブエージェント</p>
+    </header>
+
+    <h2>概要</h2>
+    <p>
+      OpenClawが「パーソナルアシスタント」たる最大の特徴は、<strong>ユーザーの指示を待たずに
+      能動的にタスクを実行する能力</strong>です。この自律的行動は、5つのサブシステムが
+      連携することで実現されています。
+    </p>
+    <div class="callout success">
+      <strong>自律ループ：</strong>
+      Cronがスケジュールジョブを発火 → ハートビートでメインエージェントを起動 →
+      エージェントがHEARTBEAT.mdを読んで行動 → 必要に応じてサブエージェントを生成 →
+      結果がAuto-Replyを通じてユーザーのチャンネルに配信 → フックが全ステージで
+      イベントを発行
+    </div>
+
+    <h2>1. Cronシステム（スケジュールタスク）</h2>
+    <p><span class="file-ref">src/cron/service.ts</span></p>
+
+    <h3>アーキテクチャ</h3>
+    <p>
+      完全なジョブスケジューラで、時間ベースの自律的エージェント実行を可能にします。
+    </p>
+
+    <h3>スケジュールタイプ</h3>
+    <table>
+      <tr><th>種類</th><th>説明</th><th>例</th></tr>
+      <tr><td><code>at</code></td><td>一回限りの実行（絶対時刻指定）</td><td>「15:00にリマインダー」</td></tr>
+      <tr><td><code>every</code></td><td>固定間隔（everyMs + anchorMs）</td><td>「30分ごとにチェック」</td></tr>
+      <tr><td><code>cron</code></td><td>標準cron式（タイムゾーン対応）</td><td><code>0 9 * * *</code>（毎朝9時）</td></tr>
+    </table>
+
+    <h3>実行モード</h3>
+    <table>
+      <tr><th>モード</th><th>動作</th></tr>
+      <tr>
+        <td><span class="tag green">メインセッション</span></td>
+        <td>システムイベントテキストをキューに入れ、ハートビートを起動してメインエージェントを呼び出す</td>
+      </tr>
+      <tr>
+        <td><span class="tag purple">分離セッション</span></td>
+        <td>独立したPIエージェントをスポーンし、独自のセッション・ツール・モデルで実行。結果はアナウンス/Webhook/なしで配信</td>
+      </tr>
+    </table>
+
+    <h3>実行フロー</h3>
+    <div class="flow-diagram">
+armTimer() → setTimeout(60秒上限)
+    │
+    ▼
+onTimer() → タイマーティック
+    │
+    ├── ジョブリストから期限切れジョブを検索
+    ├── 各ジョブをrunning状態にマーク
+    ├── 逐次実行
+    │   ├── [メイン] enqueueSystemEvent() + runHeartbeatOnce()
+    │   └── [分離] runIsolatedAgentJob() → 完全PIエージェント
+    ├── 結果適用
+    ├── 次回実行時刻の再計算
+    ├── 状態永続化（JSON5ファイル）
+    └── セッションリーパー（古いCronセッションの掃除）
+    </div>
+
+    <h3>安全メカニズム</h3>
+    <table>
+      <tr><th>メカニズム</th><th>設定</th></tr>
+      <tr><td>指数バックオフ</td><td>30秒 → 1分 → 5分 → 15分 → 60分（連続エラー時）</td></tr>
+      <tr><td>最小再発火間隔</td><td>2秒（スピンループ防止）</td></tr>
+      <tr><td>ジョブタイムアウト</td><td>10分（デフォルト）</td></tr>
+      <tr><td>スケジュールエラー上限</td><td>3回連続でジョブ自動無効化</td></tr>
+      <tr><td>スタックラン検出</td><td>2時間で古いrunningマーカーをクリア</td></tr>
+      <tr><td>ワンショット自動無効化</td><td><code>at</code>ジョブは任意の終了状態後に無効化</td></tr>
+    </table>
+
+    <h2>2. ハートビートシステム（定期チェックイン）</h2>
+    <p><span class="file-ref">src/auto-reply/heartbeat.ts</span></p>
+    <div class="callout">
+      <strong>ハートビートとは：</strong>定期的にメインエージェントを起動し、
+      HEARTBEAT.mdファイルに記載された保留中のタスクを確認させる仕組みです。
+    </div>
+
+    <h3>動作フロー</h3>
+    <ol>
+      <li>Cronサービスがハートビートトリガーを発火</li>
+      <li>ハートビートプロンプトが送信: <em>「Read HEARTBEAT.md if it exists. Follow it strictly. Do not infer or repeat old tasks. If nothing needs attention, reply HEARTBEAT_OK.」</em></li>
+      <li>エージェントがHEARTBEAT.mdを読み、タスクがあれば実行</li>
+      <li>タスクなしの場合 <code>HEARTBEAT_OK</code> を返却 → ユーザーには通知されない</li>
+    </ol>
+
+    <h3>最適化</h3>
+    <ul>
+      <li>デフォルト間隔: <strong>30分</strong></li>
+      <li><code>isHeartbeatContentEffectivelyEmpty()</code>: HEARTBEAT.mdにアクション可能なコンテンツがない場合、API呼び出しをスキップ</li>
+      <li><code>stripHeartbeatToken()</code>: <code>HEARTBEAT_OK</code>応答を検出し、ユーザーへの送信を抑制</li>
+      <li>短いACKメッセージ（300文字以下）も抑制対象</li>
+    </ul>
+
+    <h2>3. Auto-Replyシステム（自動応答）</h2>
+    <p><span class="file-ref">src/auto-reply/</span></p>
+
+    <h3>全体フロー</h3>
+    <div class="flow-diagram">
+受信メッセージ
+    │
+    ▼ dispatchInboundMessage() (dispatch.ts:35)
+    │
+    ▼ dispatchReplyFromConfig() (dispatch-from-config.ts:83)
+    ├── メッセージ重複排除
+    ├── プラグインフック発火（message_received）
+    ├── 内部フック発火
+    ├── 停止コマンドの高速中断チェック
+    │
+    ▼ getReplyFromConfig() → AI応答生成
+    │
+    ▼ runReplyAgent() (agent-runner.ts) → PIエージェント実行
+    ├── セッション履歴読み込み
+    ├── コンテキスト構築
+    ├── PIエンベデッドエージェント実行（ツール付き）
+    ├── モデルフォールバック処理
+    ├── リマインダーコミットメント検出
+    │   └── "I'll remember"と言いつつ未スケジュール → 警告ノート追加
+    │
+    ▼ 応答ペイロード生成
+    │
+    ▼ TTS変換（設定時）
+    │
+    ▼ チャンネルルーティング → 送信元チャンネルへ返信
+    </div>
+
+    <h3>インバウンドデバウンス</h3>
+    <p><span class="file-ref">src/auto-reply/inbound-debounce.ts</span></p>
+    <p>チャンネルごとに設定可能なデバウンスで、連続メッセージをバッチ処理します。</p>
+
+    <h3>グループアクティベーション</h3>
+    <p><span class="file-ref">src/auto-reply/group-activation.ts</span></p>
+    <table>
+      <tr><th>モード</th><th>動作</th></tr>
+      <tr><td><code>mention</code></td><td>@メンションされた場合のみ応答</td></tr>
+      <tr><td><code>always</code></td><td>グループ内の全メッセージに応答</td></tr>
+    </table>
+
+    <h3>メッセージキューモード</h3>
+    <table>
+      <tr><th>モード</th><th>動作</th></tr>
+      <tr><td><code>steer</code></td><td>実行中のエージェントセッションにメッセージを注入</td></tr>
+      <tr><td><code>followup</code></td><td>次のターンにキュー</td></tr>
+      <tr><td><code>collect</code></td><td>メッセージをバッチ収集</td></tr>
+      <tr><td><code>steer-backlog</code></td><td>steerを試行、失敗時にキュー</td></tr>
+      <tr><td><code>interrupt</code></td><td>現在の処理を中断</td></tr>
+    </table>
+
+    <h2>4. フックシステム（イベント駆動）</h2>
+    <p><span class="file-ref">src/hooks/internal-hooks.ts</span></p>
+
+    <h3>イベントタイプ</h3>
+    <table>
+      <tr><th>タイプ</th><th>発火タイミング</th></tr>
+      <tr><td><code>agent:bootstrap</code></td><td>エージェント初期化時（ワークスペースDir、ブートストラップファイル、設定を含む）</td></tr>
+      <tr><td><code>gateway:startup</code></td><td>Gateway起動時</td></tr>
+      <tr><td><code>message:received</code></td><td>受信メッセージ（from、content、channelId等）</td></tr>
+      <tr><td><code>message:sent</code></td><td>送信後（to、content、success/error）</td></tr>
+      <tr><td><code>command</code></td><td>コマンド実行時</td></tr>
+      <tr><td><code>session</code></td><td>セッションイベント</td></tr>
+      <tr><td><code>agent</code></td><td>エージェントイベント</td></tr>
+    </table>
+
+    <h3>フック登録と実行</h3>
+    <ul>
+      <li><code>registerInternalHook(eventKey, handler)</code> &mdash; タイプレベル（<code>command</code>）と具体的アクション（<code>command:new</code>）の両方をサポート</li>
+      <li><code>triggerInternalHook(event)</code> &mdash; タイプレベルと具体的キーの両方のハンドラを発火</li>
+      <li>エラーはハンドラごとにキャッチ（カスケード障害を防止）</li>
+    </ul>
+
+    <h3>フックの設定可能性</h3>
+    <p><span class="file-ref">src/hooks/config.ts</span></p>
+    <ul>
+      <li><code>shouldIncludeHook()</code>: 明示的無効化、OS要件、プラットフォームチェック、バイナリ可用性、環境変数、設定パスに基づいてフック実行を制御</li>
+      <li><code>always: true</code> フラグですべてのチェックをバイパス可能</li>
+    </ul>
+
+    <h2>5. サブエージェントシステム（生成型ワーカー）</h2>
+    <p><span class="file-ref">src/agents/subagent-spawn.ts</span>、<span class="file-ref">src/agents/subagent-registry.ts</span></p>
+
+    <h3>スポーンフロー</h3>
+    <div class="flow-diagram">
+サブエージェントスポーン要求
+    │
+    ▼ バリデーション
+    ├── スポーン深度チェック（callerDepth >= maxSpawnDepth → 拒否）
+    ├── アクティブ子プロセス数チェック（activeChildren >= maxChildren → 拒否）
+    └── エージェントID許可リストチェック
+    │
+    ▼ セッション作成
+    ├── Gatewayで子セッション作成
+    ├── モデルオーバーライド・思考レベル適用
+    ├── サブエージェント用システムプロンプト構築
+    │   ├── "Stay focused"（集中しろ）
+    │   ├── "Complete the task"（タスクを完了しろ）
+    │   ├── "Don't initiate"（自発的行動するな）
+    │   ├── "Be ephemeral"（一時的な存在であれ）
+    │   ├── ユーザー会話禁止
+    │   ├── 外部メッセージ送信禁止
+    │   ├── Cronジョブ作成禁止
+    │   └── 永続的状態保持禁止
+    │
+    ▼ 実行
+    ├── Gatewayのagentメソッドで子タスクを実行
+    └── サブエージェントレジストリに登録
+    </div>
+
+    <h3>レジストリ</h3>
+    <p><span class="file-ref">src/agents/subagent-registry.ts</span></p>
+    <ul>
+      <li>インメモリMap + ディスク永続化でクロスプロセス可視性を確保</li>
+      <li><code>SubagentRunRecord</code>: runId、childSessionKey、requesterSessionKey、タスク、モデル、タイムアウト、結果、アナウンス状態を追跡</li>
+      <li><strong>ライフサイクルリスナー</strong>: <code>lifecycle:start</code>、<code>lifecycle:end</code>、<code>lifecycle:error</code> を監視</li>
+      <li><strong>スイーパー</strong>: 60秒間隔で古いセッションをアーカイブ・削除</li>
+    </ul>
+
+    <h3>アナウンスフロー</h3>
+    <p><span class="file-ref">src/agents/subagent-announce.ts:710-991</span></p>
+    <ol>
+      <li>PIランの完了を待機</li>
+      <li>最新のサブエージェント出力をチャット履歴から取得</li>
+      <li>子孫サブエージェントの完了を待機（部分的なアナウンスを防止）</li>
+      <li>統計付き完了メッセージを構築（実行時間、トークン数）</li>
+      <li>要求者のセッションへ配信
+        <ul>
+          <li><code>steered</code>: アクティブセッションに注入</li>
+          <li><code>queued</code>: 後で処理するためにキュー</li>
+          <li><code>direct</code>: Gateway直接呼び出し</li>
+        </ul>
+      </li>
+      <li>ネスト配信: 要求者サブエージェントが消滅済みなら祖父母にバブルアップ</li>
+      <li>リトライ: 最大3回、指数バックオフ（1秒→2秒→4秒→8秒）、5分で期限切れ</li>
+    </ol>
+
+    <h2>システム連携の全体像</h2>
+    <div class="flow-diagram">
+自律的行動の全体フロー:
+
+Cronスケジューラ ─┬─[メイン]──→ enqueueSystemEvent()
+                  │                    │
+                  │                    ▼
+                  │              ハートビート起動
+                  │                    │
+                  │                    ▼
+                  │            メインエージェント
+                  │            HEARTBEAT.md読み込み
+                  │                    │
+                  │                    ├── タスクあり → 実行
+                  │                    │   └── サブエージェント生成可
+                  │                    └── タスクなし → HEARTBEAT_OK
+                  │
+                  └─[分離]──→ 独立PIエージェント
+                                      │
+                                      ├── ツール実行
+                                      ├── サブエージェント生成可
+                                      └── 結果配信
+                                           │
+                                           ▼
+                              Auto-Reply パイプライン
+                                           │
+                              フォーマット → TTS → チャンネルルーティング
+                                           │
+                                           ▼
+                                    ユーザーへ配信
+    </div>
+
+    <h2>安全メカニズムまとめ</h2>
+    <table>
+      <tr><th>メカニズム</th><th>場所</th><th>目的</th></tr>
+      <tr><td>スポーン深度制限</td><td>subagent-spawn.ts</td><td>無限エージェント生成の防止（デフォルト最大1）</td></tr>
+      <tr><td>エージェントあたり最大子数</td><td>subagent-spawn.ts</td><td>同時子エージェントの制限（デフォルト最大5）</td></tr>
+      <tr><td>エージェント許可リスト</td><td>subagent-spawn.ts</td><td>スポーン可能エージェントの制御</td></tr>
+      <tr><td>Cronエラーバックオフ</td><td>timer.ts</td><td>指数バックオフ 30秒→60分</td></tr>
+      <tr><td>Cron自動無効化</td><td>jobs.ts</td><td>3回のスケジュールエラーでジョブ無効化</td></tr>
+      <tr><td>ジョブタイムアウト</td><td>timer.ts</td><td>10分の実行上限</td></tr>
+      <tr><td>スタック検出</td><td>jobs.ts</td><td>2時間で古いマーカーをクリア</td></tr>
+      <tr><td>アナウンスリトライ上限</td><td>subagent-registry.ts</td><td>最大3回リトライ</td></tr>
+      <tr><td>アナウンス期限</td><td>subagent-registry.ts</td><td>5分で古いアナウンスを強制期限切れ</td></tr>
+      <tr><td>ハートビートスキップ</td><td>heartbeat.ts</td><td>空のHEARTBEAT.mdでAPI呼び出しスキップ</td></tr>
+      <tr><td>サブエージェント制約</td><td>subagent-announce.ts</td><td>Cron/能動的行動/副次クエスト禁止</td></tr>
+      <tr><td>デバウンス</td><td>inbound-debounce.ts</td><td>連射メッセージ処理の防止</td></tr>
+      <tr><td>送信ポリシー</td><td>send-policy.ts</td><td>自動応答のallow/denyオーバーライド</td></tr>
+      <tr><td>フックエラー分離</td><td>internal-hooks.ts</td><td>ハンドラごとのtry/catchでカスケード障害防止</td></tr>
+    </table>
+
+    <div class="page-nav">
+      <a href="04-memory.html">&larr; メモリシステム</a>
+      <a href="06-channels-tools.html">チャンネルとツール &rarr;</a>
+    </div>
+
+    <footer>
+      OpenClaw Architecture Analysis &mdash; 05. 自律的行動システム
+    </footer>
+  </div>
+</body>
+</html>

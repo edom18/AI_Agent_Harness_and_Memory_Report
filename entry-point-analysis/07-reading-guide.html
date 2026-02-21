@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>コードリーディングガイド - OpenClaw解析</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <nav class="breadcrumb">
+      <a href="index.html">トップ</a> &gt; コードリーディングガイド
+    </nav>
+
+    <header>
+      <h1>7. コードリーディングガイド</h1>
+      <p class="subtitle">ソースコードを読む際のエントリポイント、呼び出しフロー図、ファイル対応表</p>
+    </header>
+
+    <h2>推奨する読み進め順</h2>
+    <p>
+      OpenClawのコードベースは大規模ですが、以下の順序で読み進めることで
+      効率的に全体像を理解できます。
+    </p>
+
+    <h3>Step 1: プロジェクトドキュメントを読む</h3>
+    <table>
+      <tr><th>ファイル</th><th>内容</th><th>所要目安</th></tr>
+      <tr><td><code>README.md</code></td><td>プロジェクト概要、機能一覧、セットアップ</td><td>最初に</td></tr>
+      <tr><td><code>VISION.md</code></td><td>プロジェクトのビジョン、方向性、設計方針</td><td>最初に</td></tr>
+      <tr><td><code>AGENTS.md</code></td><td>開発ガイドライン、コーディング規約、テスト方法</td><td>開発時に</td></tr>
+    </table>
+
+    <h3>Step 2: エントリポイントを追う</h3>
+    <div class="callout">
+      <strong>読み始めるファイル：</strong><code>src/entry.ts</code> → <code>src/cli/run-main.ts</code> → <code>src/gateway/server.impl.ts</code>
+    </div>
+    <table>
+      <tr><th>ファイル</th><th>読むべきポイント</th></tr>
+      <tr><td><code>src/entry.ts</code></td><td>プロセス起動の最初のステップ。再スポーン機構に注目。</td></tr>
+      <tr><td><code>src/cli/run-main.ts</code></td><td><code>runCli()</code>関数。高速ルートと通常ルートの分岐。</td></tr>
+      <tr><td><code>src/cli/program/build-program.ts</code></td><td>Commander.jsプログラム構築。コマンド登録パターン。</td></tr>
+      <tr><td><code>src/gateway/server.impl.ts</code></td><td><code>startGatewayServer()</code>。15ステップの起動シーケンス。</td></tr>
+    </table>
+
+    <h3>Step 3: システムプロンプト構築を理解する</h3>
+    <div class="callout">
+      <strong>最重要ファイル：</strong><code>src/agents/system-prompt.ts</code>
+    </div>
+    <table>
+      <tr><th>ファイル</th><th>読むべきポイント</th></tr>
+      <tr><td><code>src/agents/system-prompt.ts</code></td><td><code>buildAgentSystemPrompt()</code>。20+セクションの組み立てロジック全体。</td></tr>
+      <tr><td><code>src/agents/system-prompt-params.ts</code></td><td><code>buildSystemPromptParams()</code>。ランタイム情報の解決。</td></tr>
+      <tr><td><code>src/agents/identity.ts</code></td><td>アイデンティティ解決の階層（ACKリアクション、メッセージプレフィックス）。</td></tr>
+      <tr><td><code>src/agents/identity-file.ts</code></td><td>IDENTITY.mdの解析。</td></tr>
+      <tr><td><code>src/agents/workspace.ts</code></td><td>ブートストラップファイルの読み込みとフィルタリング。412-466行のファイルリスト。</td></tr>
+      <tr><td><code>src/agents/bootstrap-files.ts</code></td><td>ブートストラップファイルのコンテキスト構築と切り詰め。</td></tr>
+      <tr><td><code>src/agents/sanitize-for-prompt.ts</code></td><td>プロンプトインジェクション対策。</td></tr>
+    </table>
+
+    <h3>Step 4: エージェントランタイム（PI Embedded）を理解する</h3>
+    <div class="callout">
+      <strong>核心のファイル群。コード量が多いので、関数シグネチャとコメントを先に追うことを推奨。</strong>
+    </div>
+    <table>
+      <tr><th>ファイル</th><th>読むべきポイント</th></tr>
+      <tr><td><code>src/agents/pi-embedded.ts</code></td><td>バレルモジュール。エクスポートの全体像を把握。</td></tr>
+      <tr><td><code>src/agents/pi-embedded-runner.ts</code></td><td>バレルモジュール。run/attempt/compact等のre-export。</td></tr>
+      <tr><td><code>src/agents/pi-embedded-runner/run.ts</code></td><td><code>runEmbeddedPiAgent()</code>。メインループ。174-1081行。</td></tr>
+      <tr><td><code>src/agents/pi-embedded-runner/run/attempt.ts</code></td><td>1回の試行の全ステップ。222-1282行。</td></tr>
+      <tr><td><code>src/agents/pi-embedded-subscribe.ts</code></td><td><code>subscribeEmbeddedPiSession()</code>。ストリーミングイベント処理。</td></tr>
+      <tr><td><code>src/agents/pi-embedded-runner/compact.ts</code></td><td>コンパクション（コンテキスト圧縮）。</td></tr>
+      <tr><td><code>src/agents/compaction.ts</code></td><td>コンパクションアルゴリズム（チャンキング、要約、刈り込み）。</td></tr>
+      <tr><td><code>src/agents/tool-loop-detection.ts</code></td><td>ツールループ検出システム。</td></tr>
+    </table>
+
+    <h3>Step 5: メモリシステムを理解する</h3>
+    <table>
+      <tr><th>ファイル</th><th>読むべきポイント</th></tr>
+      <tr><td><code>src/memory/manager.ts</code></td><td><code>MemoryIndexManager</code>。検索エントリポイント、シングルトンキャッシュ。</td></tr>
+      <tr><td><code>src/memory/embeddings.ts</code></td><td>Embeddingプロバイダファクトリ。autoモードの解決ロジック。</td></tr>
+      <tr><td><code>src/memory/hybrid.ts</code></td><td>ハイブリッドマージアルゴリズム。ベクトル+キーワードの統合。</td></tr>
+      <tr><td><code>src/memory/mmr.ts</code></td><td>MMR多様性再ランキング。</td></tr>
+      <tr><td><code>src/memory/temporal-decay.ts</code></td><td>時間的減衰。エバーグリーン vs 時限的知識の判定。</td></tr>
+      <tr><td><code>src/memory/internal.ts</code></td><td>チャンキング、ハッシュ、コサイン類似度。</td></tr>
+      <tr><td><code>src/agents/memory-search.ts</code></td><td>エージェント側のメモリ検索設定解決。</td></tr>
+    </table>
+
+    <h3>Step 6: 自律的行動システムを理解する</h3>
+    <table>
+      <tr><th>ファイル</th><th>読むべきポイント</th></tr>
+      <tr><td><code>src/cron/service.ts</code></td><td><code>CronService</code>クラス。CRUD操作。</td></tr>
+      <tr><td><code>src/cron/service/timer.ts</code></td><td>タイマーティック処理。<code>armTimer()</code>と<code>onTimer()</code>。</td></tr>
+      <tr><td><code>src/cron/isolated-agent.ts</code></td><td>分離エージェントジョブの実行。</td></tr>
+      <tr><td><code>src/auto-reply/dispatch.ts</code></td><td>受信メッセージディスパッチのエントリポイント。</td></tr>
+      <tr><td><code>src/auto-reply/heartbeat.ts</code></td><td>ハートビートメカニズム。プロンプトと応答処理。</td></tr>
+      <tr><td><code>src/agents/subagent-spawn.ts</code></td><td>サブエージェントスポーンのバリデーションと実行。</td></tr>
+      <tr><td><code>src/agents/subagent-registry.ts</code></td><td>サブエージェントライフサイクル管理。</td></tr>
+      <tr><td><code>src/agents/subagent-announce.ts</code></td><td>完了アナウンスフロー。</td></tr>
+      <tr><td><code>src/hooks/internal-hooks.ts</code></td><td>フックシステムの登録と発火。</td></tr>
+    </table>
+
+    <h3>Step 7: チャンネルとツールを理解する</h3>
+    <table>
+      <tr><th>ファイル</th><th>読むべきポイント</th></tr>
+      <tr><td><code>src/channels/dock.ts</code></td><td>チャンネルDockメタデータ。各チャンネルの振る舞い定義。</td></tr>
+      <tr><td><code>src/channels/registry.ts</code></td><td>チャンネルレジストリ。8コアチャンネル。</td></tr>
+      <tr><td><code>src/agents/pi-tools.ts</code></td><td><code>createOpenClawCodingTools()</code>。ツール組み立てとポリシーパイプライン。</td></tr>
+      <tr><td><code>src/agents/tool-policy.ts</code></td><td>ツールプロファイルとグループ定義。</td></tr>
+      <tr><td><code>src/agents/openclaw-tools.ts</code></td><td><code>createOpenClawTools()</code>。ネイティブツールの生成。</td></tr>
+      <tr><td><code>src/agents/tools/message-tool.ts</code></td><td>messageツール。53アクションの動的スキーマ。</td></tr>
+      <tr><td><code>src/agents/skills.ts</code></td><td>スキル読み込みと優先度解決。</td></tr>
+    </table>
+
+    <h2>主要呼び出しフロー図</h2>
+
+    <h3>フロー1: ユーザーメッセージ受信 → AI応答</h3>
+    <div class="flow-diagram">
+[チャンネル] ユーザーがメッセージ送信
+    │
+    ▼ チャンネルプラグインが受信
+    │
+    ▼ dispatchInboundMessage()          [src/auto-reply/dispatch.ts:35]
+    │
+    ▼ dispatchReplyFromConfig()          [src/auto-reply/reply/dispatch-from-config.ts:83]
+    ├── 重複排除
+    ├── フック発火 (message_received)
+    ├── コマンド検出 (/status, /reset 等)
+    │
+    ▼ getReplyFromConfig()
+    │
+    ▼ runReplyAgent()                   [src/auto-reply/reply/agent-runner.ts]
+    │
+    ▼ runEmbeddedPiAgent()              [src/agents/pi-embedded-runner/run.ts:174]
+    ├── モデル解決
+    ├── 認証プロファイル解決
+    │
+    ▼ attempt()                         [src/agents/pi-embedded-runner/run/attempt.ts:222]
+    ├── ツール生成: createOpenClawCodingTools()  [src/agents/pi-tools.ts:164]
+    ├── システムプロンプト構築: buildAgentSystemPrompt()  [src/agents/system-prompt.ts:169]
+    ├── セッション作成
+    ├── 履歴サニタイズ
+    ├── サブスクリプション: subscribeEmbeddedPiSession()  [src/agents/pi-embedded-subscribe.ts]
+    │
+    ▼ activeSession.prompt(effectivePrompt)  ← LLM呼び出し
+    │
+    ▼ [ストリーミング応答]
+    ├── ツール呼び出し → ツール実行 → 結果をLLMに返却 → 繰り返し
+    ├── テキスト出力 → ブロックチャンキング → onBlockReply()
+    │
+    ▼ 結果収集 (assistantTexts, toolMetas, usage)
+    │
+    ▼ 応答ペイロード生成
+    │
+    ▼ TTS変換（設定時）
+    │
+    ▼ チャンネルルーティング → ユーザーへ送信
+    </div>
+
+    <h3>フロー2: Cronジョブ実行 → 自律的行動</h3>
+    <div class="flow-diagram">
+Cronタイマーティック
+    │
+    ▼ onTimer()                         [src/cron/service/timer.ts:187]
+    ├── ジョブ期限チェック
+    │
+    ▼ executeJobCore()                  [src/cron/service/timer.ts:455]
+    │
+    ├─[メインセッション]─────────────────────────────────┐
+    │  ▼ enqueueSystemEvent()                            │
+    │  ▼ requestHeartbeatNow() or runHeartbeatOnce()     │
+    │  ▼ ハートビートプロンプト送信                        │
+    │  ▼ メインエージェントがHEARTBEAT.md読み込み         │
+    │  ▼ タスク実行 or HEARTBEAT_OK応答                   │
+    │                                                     │
+    ├─[分離セッション]─────────────────────────────────────┐
+    │  ▼ runIsolatedAgentJob()          [src/cron/isolated-agent/run.ts]
+    │  ▼ 独立PIエージェントスポーン                        │
+    │  ▼ ツール付きでタスク実行                            │
+    │  ▼ 結果配信（announce/webhook/none）                 │
+    └──────────────────────────────────────────────────────┘
+    </div>
+
+    <h3>フロー3: サブエージェントスポーン → 結果アナウンス</h3>
+    <div class="flow-diagram">
+親エージェントが sessions_spawn ツールを呼び出し
+    │
+    ▼ spawnSubagentDirect()             [src/agents/subagent-spawn.ts:70]
+    ├── 深度チェック (maxSpawnDepth)
+    ├── 子数チェック (maxChildren)
+    ├── 許可リストチェック
+    │
+    ▼ 子セッション作成（Gateway経由）
+    ▼ サブエージェント用システムプロンプト構築
+    ▼ Gateway agent()呼び出し → 子PIエージェント実行
+    ▼ レジストリに登録
+    │
+    ▼ [子エージェント実行中...]
+    │  ├── ツール実行
+    │  ├── さらにサブエージェント生成可（深度制限内）
+    │  └── 完了
+    │
+    ▼ runSubagentAnnounceFlow()         [src/agents/subagent-announce.ts:710]
+    ├── PIラン完了待機
+    ├── 最新出力取得
+    ├── 子孫完了待機
+    ├── 統計付き完了メッセージ構築
+    │
+    ▼ 親セッションへ配信
+       ├── steered: アクティブセッションに注入
+       ├── queued: 後で処理キュー
+       └── direct: Gateway直接呼び出し
+    </div>
+
+    <h3>フロー4: メモリ検索</h3>
+    <div class="flow-diagram">
+エージェントが memory_search ツールを呼び出し
+    │
+    ▼ MemoryIndexManager.search()       [src/memory/manager.ts:203]
+    ├── ダーティなら同期実行
+    │
+    ├─[Embeddingあり]────────────────────────────────────┐
+    │  ▼ embed(query) → ベクトル生成                      │
+    │  ▼ vectorSearch(): cosine距離で近傍検索              │
+    │  ▼ keywordSearch(): FTS5 BM25ランキング             │
+    │  ▼ hybridMerge(): 0.7×vector + 0.3×text            │
+    │  ▼ temporalDecay(): 時間的減衰適用                   │
+    │  ▼ mmrRerank(): 多様性再ランキング                   │
+    │  ▼ minScore=0.35フィルタ + maxResults=6             │
+    │                                                     │
+    ├─[Embeddingなし]────────────────────────────────────┐
+    │  ▼ extractKeywords(): ストップワード除去             │
+    │  ▼ 各キーワードで独立FTS検索                         │
+    │  ▼ マージ・重複排除                                  │
+    └──────────────────────────────────────────────────────┘
+    │
+    ▼ 結果をエージェントに返却（パス、行番号、関連テキスト）
+    </div>
+
+    <h2>設定ファイル対応表</h2>
+    <table>
+      <tr><th>ファイル</th><th>場所</th><th>型定義</th></tr>
+      <tr><td><code>openclaw.json</code></td><td><code>~/.openclaw/openclaw.json</code></td><td><code>src/config/types.ts</code></td></tr>
+      <tr><td><code>SOUL.md</code></td><td>ワークスペースルート</td><td>-</td></tr>
+      <tr><td><code>IDENTITY.md</code></td><td>ワークスペースルート</td><td><code>src/agents/identity-file.ts:5</code></td></tr>
+      <tr><td><code>USER.md</code></td><td>ワークスペースルート</td><td>-</td></tr>
+      <tr><td><code>AGENTS.md</code></td><td>ワークスペースルート</td><td>-</td></tr>
+      <tr><td><code>TOOLS.md</code></td><td>ワークスペースルート</td><td>-</td></tr>
+      <tr><td><code>MEMORY.md</code></td><td>ワークスペースルート</td><td>-</td></tr>
+      <tr><td><code>HEARTBEAT.md</code></td><td>ワークスペースルート</td><td>-</td></tr>
+      <tr><td><code>BOOTSTRAP.md</code></td><td>ワークスペースルート（初回のみ）</td><td>-</td></tr>
+      <tr><td><code>jobs.json</code></td><td><code>~/.config/openclaw/cron/</code></td><td><code>src/cron/types.ts</code></td></tr>
+      <tr><td><code>*.jsonl</code></td><td><code>~/.openclaw/sessions/</code></td><td>-</td></tr>
+      <tr><td><code>*.sqlite</code></td><td><code>~/.openclaw/state/memory/</code></td><td>-</td></tr>
+    </table>
+
+    <h2>主要型定義の場所</h2>
+    <table>
+      <tr><th>型</th><th>ファイル</th></tr>
+      <tr><td><code>OpenClawConfig</code></td><td><code>src/config/config.ts</code></td></tr>
+      <tr><td><code>IdentityConfig</code></td><td><code>src/config/types.base.ts:187</code></td></tr>
+      <tr><td><code>ChannelPlugin</code></td><td><code>src/channels/plugins/types.plugin.ts:48</code></td></tr>
+      <tr><td><code>ChannelDock</code></td><td><code>src/channels/dock.ts:47</code></td></tr>
+      <tr><td><code>CronJob</code></td><td><code>src/cron/types.ts</code></td></tr>
+      <tr><td><code>SubagentRunRecord</code></td><td><code>src/agents/subagent-registry.ts</code></td></tr>
+      <tr><td><code>SkillEntry</code></td><td><code>src/agents/skills/types.ts:66</code></td></tr>
+      <tr><td><code>PromptMode</code></td><td><code>src/agents/system-prompt.ts:15</code></td></tr>
+    </table>
+
+    <h2>デバッグ・調査のコツ</h2>
+    <ul>
+      <li><code>*.e2e.test.ts</code> ファイルは実際の使用パターンを示しており、動作仕様の理解に最適</li>
+      <li><code>*.test-harness.ts</code> ファイルはテスト用のモック・ヘルパーで、依存関係の把握に役立つ</li>
+      <li>設定スキーマは <code>src/config/types.*.ts</code> の30以上のファイルに分散。全体像は <code>src/config/types.ts</code> のインポートから追える</li>
+      <li><code>src/agents/defaults.ts</code> にデフォルトプロバイダ・モデルの定義がある</li>
+      <li>ツールの具体的実装は <code>src/agents/tools/</code> ディレクトリ内の各ファイル</li>
+    </ul>
+
+    <div class="page-nav">
+      <a href="06-channels-tools.html">&larr; チャンネルとツール</a>
+      <a href="index.html">トップへ戻る &rarr;</a>
+    </div>
+
+    <footer>
+      OpenClaw Architecture Analysis &mdash; 07. コードリーディングガイド
+    </footer>
+  </div>
+</body>
+</html>
