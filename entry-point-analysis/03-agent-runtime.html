@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>エージェントランタイム（PI Embedded） - OpenClaw解析</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <nav class="breadcrumb">
+      <a href="index.html">トップ</a> &gt; エージェントランタイム
+    </nav>
+
+    <header>
+      <h1>3. エージェントランタイム（PI Embedded）</h1>
+      <p class="subtitle">メッセージ処理ループ、ツール呼び出し、ストリーミング、コンパクション</p>
+    </header>
+
+    <h2>概要</h2>
+    <p>
+      PI Embedded Agent Runtimeは、OpenClawの中核エンジンです。
+      <code>@mariozechner/pi-agent-core</code> および <code>@mariozechner/pi-coding-agent</code> SDKを
+      ラップし、<strong>プロセス内で動作するステートフルなストリーミングエージェントループ</strong>を実現しています。
+    </p>
+    <div class="callout">
+      <strong>「Embedded」の意味：</strong>外部APIサービスではなく、OpenClawプロセス内でエージェントが動作します。
+      これにより、永続セッション、統合ツール実行、リアルタイムストリーミング、マルチチャンネル統合が可能になります。
+    </div>
+
+    <h2>メッセージ処理の全体フロー</h2>
+    <div class="flow-diagram">
+メッセージ入力
+    │
+    ▼
+Phase 1: セットアップ (run.ts:174-305)
+    ├── レーンキューイング（セッション単位 + グローバル）
+    ├── モデル解決（フック: before_model_resolve, before_agent_start）
+    ├── コンテキストウィンドウガード（最小16Kトークン）
+    └── 認証プロファイル解決（ローテーション対応）
+    │
+    ▼
+Phase 2: 実行試行 (attempt.ts:222-1282)
+    ├── ワークスペース・サンドボックスセットアップ
+    ├── ツール生成 → createOpenClawCodingTools()
+    ├── システムプロンプト構築
+    ├── セッション作成 → createAgentSession()
+    ├── 履歴サニタイズ
+    │   ├── validateAnthropicTurns() / validateGeminiTurns()
+    │   ├── limitHistoryTurns()
+    │   └── sanitizeToolUseResultPairing()
+    ├── サブスクリプション設定 → subscribeEmbeddedPiSession()
+    ├── アクティブラン登録
+    ├── プロンプト送信 → activeSession.prompt(effectivePrompt)
+    ├── コンパクション待機
+    └── 結果収集（assistantTexts, toolMetas, usage）
+    │
+    ▼
+Phase 3: リトライ・エラー処理 (run.ts:480-1074)
+    ├── コンテキストオーバーフロー → 自動コンパクション（最大3回）
+    ├── 認証失敗 → プロファイルローテーション
+    ├── 思考レベル非対応 → フォールバック
+    ├── レート制限 / 課金エラー → FailoverError
+    └── タイムアウト → 中断
+    </div>
+
+    <h2>Phase 1: セットアップの詳細</h2>
+
+    <h3>レーンキューイング</h3>
+    <p><span class="file-ref">src/agents/pi-embedded-runner/run.ts:177-183</span></p>
+    <p>
+      メッセージはセッション固有レーンとグローバルレーンの両方にキューイングされ、
+      セッションごとの逐次処理を保証します。4種類のレーンがあります：
+    </p>
+    <table>
+      <tr><th>レーン</th><th>用途</th></tr>
+      <tr><td><code>Main</code></td><td>メインセッションの処理</td></tr>
+      <tr><td><code>Cron</code></td><td>スケジュールタスクの処理</td></tr>
+      <tr><td><code>Subagent</code></td><td>サブエージェントの処理</td></tr>
+      <tr><td><code>Nested</code></td><td>ネストされたサブエージェント</td></tr>
+    </table>
+
+    <h3>認証プロファイル解決</h3>
+    <p><span class="file-ref">src/agents/pi-embedded-runner/run.ts:307-471</span></p>
+    <p>
+      マルチプロファイル認証をサポートし、クールダウン/ローテーション機能があります。
+      あるプロファイルが失敗した場合、自動的に次のプロファイルに切り替わります。
+    </p>
+
+    <h2>Phase 2: 実行試行の詳細</h2>
+
+    <h3>ツール生成</h3>
+    <p><span class="file-ref">src/agents/pi-embedded-runner/run/attempt.ts:291-329</span></p>
+    <p>
+      <code>createOpenClawCodingTools()</code> がフルツールセットを生成します。
+      ツールは <code>builtInTools</code> と <code>customTools</code> に分割され、
+      マルチレイヤーのポリシーフィルタリングを通過します。
+    </p>
+
+    <h3>セッション管理</h3>
+    <p><span class="file-ref">src/agents/pi-embedded-runner/run/attempt.ts:490-589</span></p>
+    <ul>
+      <li><strong>セッション書き込みロック</strong>: <code>acquireSessionWriteLock()</code> で並行書き込みを防止</li>
+      <li><strong>セッションファイル永続化</strong>: <code>SessionManager.open(params.sessionFile)</code> でJSONLファイルから状態を読み込み</li>
+      <li><strong>履歴サニタイズパイプライン</strong>:
+        <ul>
+          <li><code>sanitizeSessionHistory()</code> → プロバイダ固有のクリーンアップ</li>
+          <li><code>validateGeminiTurns()</code> / <code>validateAnthropicTurns()</code> → ターン順序の検証</li>
+          <li><code>limitHistoryTurns()</code> → 設定に基づく履歴長の上限</li>
+          <li><code>sanitizeToolUseResultPairing()</code> → 孤立したツール結果の修復</li>
+        </ul>
+      </li>
+    </ul>
+
+    <h3>メッセージステアリング</h3>
+    <p>
+      <code>activeSession.steer(text)</code> により、実行中のストリーミングランにメッセージを注入できます。
+      これにより、エージェントの処理中にも追加の指示を送ることが可能です。
+    </p>
+
+    <h2>ストリーミング / サブスクリプションモデル</h2>
+    <p><span class="file-ref">src/agents/pi-embedded-subscribe.ts:33-717</span></p>
+    <p>
+      サブスクリプションシステムは、SDKイベントとユーザー向け出力の橋渡しを行います。
+    </p>
+
+    <h3>イベントハンドラディスパッチ</h3>
+    <table>
+      <tr><th>イベント</th><th>ハンドラ</th><th>実行モード</th></tr>
+      <tr><td><code>message_start</code></td><td><code>handleMessageStart</code></td><td>同期</td></tr>
+      <tr><td><code>message_update</code></td><td><code>handleMessageUpdate</code></td><td>同期</td></tr>
+      <tr><td><code>message_end</code></td><td><code>handleMessageEnd</code></td><td>同期</td></tr>
+      <tr><td><code>tool_execution_start</code></td><td><code>handleToolExecutionStart</code></td><td>非同期 (best-effort)</td></tr>
+      <tr><td><code>tool_execution_update</code></td><td><code>handleToolExecutionUpdate</code></td><td>同期</td></tr>
+      <tr><td><code>tool_execution_end</code></td><td><code>handleToolExecutionEnd</code></td><td>非同期 (best-effort)</td></tr>
+      <tr><td><code>auto_compaction_start</code></td><td><code>handleAutoCompactionStart</code></td><td>同期</td></tr>
+      <tr><td><code>auto_compaction_end</code></td><td><code>handleAutoCompactionEnd</code></td><td>同期</td></tr>
+    </table>
+
+    <h3>テキスト処理パイプライン</h3>
+    <div class="flow-diagram">
+生ストリーム
+    │
+    ▼ stripBlockTags()         ← &lt;think&gt;タグ除去、&lt;final&gt;タグ処理
+    ▼ stripDowngradedToolCallText() ← 履歴アーティファクト除去
+    ▼ メッセージングツール重複チェック
+    ▼ EmbeddedBlockChunker    ← 配信可能なチャンクに分割
+    ▼ emitBlockChunk()        ← onBlockReply()コールバック
+    ▼ リプライディレクティブ解析（メディアURL、音声フラグ、reply-to ID）
+    </div>
+
+    <h3>状態管理（EmbeddedPiSubscribeState）</h3>
+    <ul>
+      <li><code>assistantTexts[]</code> &mdash; 蓄積された最終テキスト</li>
+      <li><code>toolMetas[]</code> &mdash; ツール呼び出しメタデータ</li>
+      <li><code>blockState</code> &mdash; <code>&lt;think&gt;</code>/<code>&lt;final&gt;</code>タグのステートフル解析</li>
+      <li><code>deltaBuffer</code> / <code>blockBuffer</code> &mdash; ストリーミングバッファ</li>
+      <li><code>messagingToolSentTexts[]</code> &mdash; 重複排除追跡</li>
+      <li><code>compactionInFlight</code> / <code>pendingCompactionRetry</code> &mdash; コンパクション調整</li>
+    </ul>
+
+    <h2>ツールループ検出</h2>
+    <p><span class="file-ref">src/agents/tool-loop-detection.ts</span></p>
+    <p>
+      エージェントが無限ループに陥ることを防ぐ洗練されたシステムです。
+      直近30回のツール呼び出しをスライディングウィンドウで追跡します。
+    </p>
+    <table>
+      <tr><th>検出器</th><th>閾値</th><th>アクション</th></tr>
+      <tr><td>汎用リピート検出</td><td>10回で警告、20回でクリティカル</td><td>警告メッセージ注入</td></tr>
+      <tr><td>ポーリング無進展検出</td><td>ポーリングツールの状態変化なし</td><td>停止促進</td></tr>
+      <tr><td>ピンポン検出</td><td>交互呼び出しパターン</td><td>パターン通知</td></tr>
+      <tr><td>グローバル回路遮断器</td><td>30回同一無進展呼び出し</td><td>強制停止</td></tr>
+    </table>
+    <p>SHA-256ハッシュ（ツール名 + 安定シリアライズされたパラメータ）でパターンマッチングを行います。</p>
+
+    <h2>コンパクション（コンテキストウィンドウ管理）</h2>
+    <p><span class="file-ref">src/agents/compaction.ts</span>、<span class="file-ref">src/agents/pi-embedded-runner/compact.ts</span></p>
+
+    <h3>2つのモード</h3>
+    <table>
+      <tr><th>モード</th><th>トリガー</th><th>詳細</th></tr>
+      <tr><td>自動コンパクション</td><td>SDKがコンテキスト上限接近時に発動</td><td>auto_compaction_start/endイベントで観測</td></tr>
+      <tr><td>明示コンパクション</td><td>オーバーフロー回復時に呼び出し</td><td>compactEmbeddedPiSessionDirect()</td></tr>
+    </table>
+
+    <h3>コンパクションアルゴリズム</h3>
+    <ul>
+      <li><strong>トークン推定</strong>: <code>estimateMessagesTokens()</code> + 安全マージン（1.2倍）</li>
+      <li><strong>適応チャンク比率</strong>: メッセージサイズに応じて0.15〜0.40の比率で調整</li>
+      <li><strong>分割戦略</strong>:
+        <ul>
+          <li><code>splitMessagesByTokenShare()</code> &mdash; 均等トークン分割</li>
+          <li><code>chunkMessagesByMaxTokens()</code> &mdash; 最大トークンでチャンク</li>
+        </ul>
+      </li>
+      <li><strong>段階的要約</strong>: <code>summarizeInStages()</code>
+        <ul>
+          <li>パートに分割 → 各パートを要約 → 要約をマージ</li>
+          <li>リトライ: 3回試行、500-5000msバックオフ</li>
+        </ul>
+      </li>
+      <li><strong>大型メッセージ除外</strong>: コンテキストの50%超のメッセージは要約対象から除外し「[Large message omitted]」として記録</li>
+      <li><strong>履歴刈り込み</strong>: <code>pruneHistoryForContextShare()</code> で最も古いチャンクから削除（最大コンテキストの50%予算）</li>
+    </ul>
+
+    <h3>オーバーフロー回復フロー</h3>
+    <div class="flow-diagram">
+コンテキストオーバーフロー検出
+    │
+    ▼ 試行が既に自動コンパクション済み？
+    │ ├── はい → コンパクションなしでリトライ
+    │ └── いいえ ↓
+    ▼ 明示コンパクション実行
+    │ ├── 成功 → リトライ
+    │ └── 失敗 ↓
+    ▼ ツール結果の切り詰め
+    │ ├── 成功 → リトライ
+    │ └── 失敗 ↓
+    ▼ エラー返却「/resetを使ってください」
+    </div>
+
+    <h2>エラー処理とリトライ</h2>
+
+    <h3>多層エラー戦略</h3>
+    <ol>
+      <li><span class="tag primary">L1</span> <strong>認証プロファイルローテーション</strong> &mdash; 失敗プロファイルにクールダウンを設定し次に切り替え</li>
+      <li><span class="tag primary">L2</span> <strong>思考レベルフォールバック</strong> &mdash; サポートされていない思考レベルを段階的にフォールバック</li>
+      <li><span class="tag primary">L3</span> <strong>モデルフェイルオーバー</strong> &mdash; 全プロファイル枯渇時に代替モデルへ切り替え（FailoverError）</li>
+      <li><span class="tag primary">L4</span> <strong>コンテキストオーバーフロー回復</strong> &mdash; 最大3回のコンパクション試行</li>
+      <li><span class="tag primary">L5</span> <strong>タイムアウト処理</strong> &mdash; AbortControllerによるキャンセル</li>
+    </ol>
+
+    <h2>「Embedded」ならではの特徴</h2>
+    <p>単純なAPI呼び出しと異なる点：</p>
+    <ol>
+      <li><strong>プロセス内実行</strong> &mdash; 同一Node.jsプロセスで動作し、状態を共有</li>
+      <li><strong>永続セッション</strong> &mdash; JSONLファイルに完全なセッション状態を永続化</li>
+      <li><strong>並行ラン管理</strong> &mdash; グローバル <code>ACTIVE_EMBEDDED_RUNS</code> マップでアクティブランを追跡</li>
+      <li><strong>レーンベース並行制御</strong> &mdash; セッションレーン + グローバルレーンで競合を防止</li>
+      <li><strong>セッション書き込みロック</strong> &mdash; ファイルレベルのロック</li>
+      <li><strong>統合ツール実行</strong> &mdash; ワークスペース・サンドボックス・ファイルシステムへのフルアクセス</li>
+      <li><strong>ストリーミング統合</strong> &mdash; WebSocket経由のリアルタイムイベント発行</li>
+      <li><strong>プラグイン/フックシステム</strong> &mdash; 全ステージにライフサイクルフック</li>
+      <li><strong>マルチチャンネルサポート</strong> &mdash; 同一ランタイムで全チャンネルを処理</li>
+      <li><strong>サンドボックス分離</strong> &mdash; ツール呼び出しのオプショナルサンドボックス実行</li>
+    </ol>
+
+    <div class="page-nav">
+      <a href="02-system-prompt.html">&larr; システムプロンプト</a>
+      <a href="04-memory.html">メモリシステム &rarr;</a>
+    </div>
+
+    <footer>
+      OpenClaw Architecture Analysis &mdash; 03. エージェントランタイム
+    </footer>
+  </div>
+</body>
+</html>

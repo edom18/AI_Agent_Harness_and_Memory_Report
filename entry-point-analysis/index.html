@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenClaw アーキテクチャ解析</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>OpenClaw アーキテクチャ解析</h1>
+      <p class="subtitle">パーソナルAIアシスタントの自律的振る舞いを支える仕組みの全体像</p>
+    </header>
+
+    <h2>このドキュメントについて</h2>
+    <p>
+      このドキュメント群は、OpenClawプロジェクトの内部アーキテクチャを解析し、
+      <strong>「パーソナルアシスタントとしての自律的振る舞い」</strong>がどのような仕組みで実現されているかを明らかにしたものです。
+    </p>
+    <p>
+      OpenClawは単なるチャットボットではなく、<strong>記憶を持ち、自律的にタスクを実行し、
+      複数のメッセージングプラットフォームで人間のように振る舞うパーソナルAIアシスタント</strong>です。
+      その仕組みを理解するために、以下の順序でドキュメントを読み進めることを推奨します。
+    </p>
+
+    <h2>推奨する読み進め方</h2>
+    <div class="card-grid">
+      <a href="01-overview.html" class="card" style="text-decoration:none;">
+        <h3><span class="number">1</span>全体概要とアーキテクチャ</h3>
+        <p>プロジェクト構造、エントリポイント、起動シーケンス、主要コンポーネントの関係性。まずここから。</p>
+      </a>
+      <a href="02-system-prompt.html" class="card" style="text-decoration:none;">
+        <h3><span class="number">2</span>システムプロンプトとアイデンティティ</h3>
+        <p>AIの人格・性格がどう構築されるか。SOUL.md、IDENTITY.md、プロンプト組み立てフロー。</p>
+      </a>
+      <a href="03-agent-runtime.html" class="card" style="text-decoration:none;">
+        <h3><span class="number">3</span>エージェントランタイム（PI Embedded）</h3>
+        <p>メッセージ処理ループ、ツール呼び出し、ストリーミング、コンパクション。中核の実行エンジン。</p>
+      </a>
+      <a href="04-memory.html" class="card" style="text-decoration:none;">
+        <h3><span class="number">4</span>メモリ・知識システム</h3>
+        <p>長期記憶、セマンティック検索、Embedding、ハイブリッド検索。「覚えている」仕組み。</p>
+      </a>
+      <a href="05-autonomous.html" class="card" style="text-decoration:none;">
+        <h3><span class="number">5</span>自律的行動システム</h3>
+        <p>Cron、ハートビート、Auto-Reply、フック、サブエージェント。能動的に動く仕組み。</p>
+      </a>
+      <a href="06-channels-tools.html" class="card" style="text-decoration:none;">
+        <h3><span class="number">6</span>マルチチャンネルとツール</h3>
+        <p>WhatsApp/Telegram/Discord等の抽象化、メッセージルーティング、50以上のツール群。</p>
+      </a>
+      <a href="07-reading-guide.html" class="card" style="text-decoration:none;">
+        <h3><span class="number">7</span>コードリーディングガイド</h3>
+        <p>ソースコードを読む際のエントリポイント、呼び出しフロー図、ファイル対応表。</p>
+      </a>
+    </div>
+
+    <h2>OpenClawの「パーソナル」たる所以</h2>
+    <p>解析の結果、OpenClawがパーソナルアシスタントとして機能するための核心的な仕組みは以下の5つに集約されます：</p>
+
+    <div class="callout success">
+      <strong>1. アイデンティティシステム</strong> &mdash;
+      SOUL.md（人格定義）、IDENTITY.md（名前・キャラクター）、USER.md（ユーザー情報）により、
+      初回起動時の対話的なオンボーディングを経て、固有の人格を獲得する。
+    </div>
+
+    <div class="callout success">
+      <strong>2. 永続的メモリ</strong> &mdash;
+      SQLite + ベクトル検索 + FTS5によるハイブリッド検索で過去の会話や知識を記憶し、
+      時間的減衰（Temporal Decay）により「最近の記憶ほど鮮明」という人間的な特性を模倣する。
+    </div>
+
+    <div class="callout success">
+      <strong>3. 自律的行動</strong> &mdash;
+      Cronスケジューラ、ハートビートシステム、サブエージェント生成により、
+      ユーザーの指示を待たずに能動的にタスクを実行し、結果を報告する。
+    </div>
+
+    <div class="callout success">
+      <strong>4. マルチチャンネル統合</strong> &mdash;
+      WhatsApp、Telegram、Discord、Slack、Signal、iMessage等を統一的に扱い、
+      チャンネル横断でコンテキストを維持しながら、各プラットフォームに適応した振る舞いを行う。
+    </div>
+
+    <div class="callout success">
+      <strong>5. 巨大なシステムプロンプト</strong> &mdash;
+      20以上のセクションからなるシステムプロンプトがランタイム情報、ワークスペースコンテキスト、
+      スキル、メモリ、ツール定義、チャンネル能力を統合し、エージェントの行動を精密に制御する。
+    </div>
+
+    <h2>アーキテクチャ概要図</h2>
+    <div class="flow-diagram">
+┌─────────────────────────────────────────────────────────┐
+│                    ユーザー                              │
+│  WhatsApp / Telegram / Discord / Slack / Signal / Web   │
+└───────────────────────┬─────────────────────────────────┘
+                        │
+                        ▼
+┌───────────────────────────────────────────────────────┐
+│                  Gateway Server                        │
+│         (WebSocket + HTTP コントロールプレーン)          │
+│                ws://127.0.0.1:18789                    │
+├───────────────────────┬───────────────────────────────┤
+│                       │                               │
+│  ┌────────────┐  ┌────┴─────┐  ┌──────────────────┐  │
+│  │ Channel    │  │ Auto-    │  │ Cron Service     │  │
+│  │ Plugins    │  │ Reply    │  │ (スケジューラ)    │  │
+│  └─────┬──────┘  └────┬─────┘  └───────┬──────────┘  │
+│        │              │                │              │
+│        └──────┬───────┴────────┬───────┘              │
+│               │                │                      │
+│               ▼                ▼                      │
+│  ┌─────────────────────────────────────────────┐      │
+│  │         PI Embedded Agent Runtime           │      │
+│  │   (メッセージ処理ループ + ツール実行)        │      │
+│  ├─────────────────────────────────────────────┤      │
+│  │ System Prompt │ Identity │ Bootstrap Files  │      │
+│  ├───────────────┼──────────┼──────────────────┤      │
+│  │ Tool System   │ Memory   │ Sub-Agents       │      │
+│  └─────────────────────────────────────────────┘      │
+│                                                       │
+│  ┌──────────┐  ┌──────────┐  ┌──────────────────┐    │
+│  │ Sessions │  │ Hooks    │  │ Skills           │    │
+│  │ (永続化) │  │ (イベント)│  │ (50+拡張機能)    │    │
+│  └──────────┘  └──────────┘  └──────────────────┘    │
+└───────────────────────────────────────────────────────┘
+    </div>
+
+    <h2>技術スタック</h2>
+    <table>
+      <tr><th>カテゴリ</th><th>技術</th></tr>
+      <tr><td>言語</td><td>TypeScript (ESM)</td></tr>
+      <tr><td>ランタイム</td><td>Node.js 22+</td></tr>
+      <tr><td>パッケージ管理</td><td>pnpm / bun</td></tr>
+      <tr><td>AIプロバイダ</td><td>Anthropic (Claude Opus 4.6), OpenAI, Google Gemini 等</td></tr>
+      <tr><td>エージェントSDK</td><td>@mariozechner/pi-agent-core, pi-coding-agent</td></tr>
+      <tr><td>メモリストレージ</td><td>SQLite + sqlite-vec (ベクトル検索) + FTS5</td></tr>
+      <tr><td>Gateway</td><td>Express + ws (WebSocket)</td></tr>
+      <tr><td>CLI</td><td>Commander.js</td></tr>
+      <tr><td>チャンネル</td><td>grammY (Telegram), Baileys (WhatsApp), discord.js, @slack/bolt, signal-cli</td></tr>
+      <tr><td>ブラウザ</td><td>Playwright</td></tr>
+      <tr><td>テスト</td><td>Vitest</td></tr>
+    </table>
+
+    <footer>
+      OpenClaw Architecture Analysis &mdash; Generated from source code analysis
+    </footer>
+  </div>
+</body>
+</html>

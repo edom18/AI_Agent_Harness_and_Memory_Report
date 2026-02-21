@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>システムプロンプトとアイデンティティ - OpenClaw解析</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <nav class="breadcrumb">
+      <a href="index.html">トップ</a> &gt; システムプロンプトとアイデンティティ
+    </nav>
+
+    <header>
+      <h1>2. システムプロンプトとアイデンティティ</h1>
+      <p class="subtitle">AIの人格がどのように構築され、プロンプトがどう組み立てられるか</p>
+    </header>
+
+    <h2>概要</h2>
+    <p>
+      OpenClawの「パーソナル」な性格は、<strong>3層のアイデンティティシステム</strong>と、
+      <strong>20以上のセクションから成る巨大なシステムプロンプト</strong>によって実現されています。
+      このセクションでは、AIの人格がどのように定義・構築・注入されるかを詳細に解説します。
+    </p>
+
+    <h2>アイデンティティの3層構造</h2>
+    <div class="callout">
+      <strong>核心ポイント：</strong>OpenClawはジェネリックなAIアシスタントではありません。
+      初回起動時の対話的オンボーディングを経て、ユーザーと協力して固有の人格を獲得します。
+    </div>
+
+    <h3>Layer 1: 設定ベースのアイデンティティ</h3>
+    <p><span class="file-ref">src/agents/identity.ts</span></p>
+    <p>
+      <code>resolveAgentIdentity()</code> が設定ファイルの <code>config.agents.list[].identity</code> から
+      アイデンティティ情報を読み取ります。
+    </p>
+    <table>
+      <tr><th>フィールド</th><th>用途</th></tr>
+      <tr><td><code>name</code></td><td>表示名（メッセージプレフィックスに使用）</td></tr>
+      <tr><td><code>theme</code></td><td>テーマ</td></tr>
+      <tr><td><code>emoji</code></td><td>ACKリアクション（デフォルト: 👀）</td></tr>
+      <tr><td><code>avatar</code></td><td>アバター画像パス</td></tr>
+    </table>
+
+    <h3>Layer 2: ファイルベースのアイデンティティ</h3>
+    <p><span class="file-ref">src/agents/identity-file.ts</span></p>
+    <p>
+      ワークスペースの <code>IDENTITY.md</code> ファイルからMarkdown形式で人格情報を読み込みます。
+      設定ベースよりも拡張されたフィールドを持ちます：
+    </p>
+    <table>
+      <tr><th>フィールド</th><th>説明</th><th>例</th></tr>
+      <tr><td><code>name</code></td><td>名前</td><td>Clawd</td></tr>
+      <tr><td><code>emoji</code></td><td>絵文字</td><td>🦞</td></tr>
+      <tr><td><code>creature</code></td><td>キャラクター種別</td><td>lobster</td></tr>
+      <tr><td><code>vibe</code></td><td>雰囲気・性格</td><td>friendly and direct</td></tr>
+      <tr><td><code>avatar</code></td><td>アバター</td><td>(画像パス)</td></tr>
+      <tr><td><code>theme</code></td><td>テーマ</td><td>ocean</td></tr>
+    </table>
+    <p><code>parseIdentityMarkdown()</code> がMarkdownファイルを解析し、プレースホルダー値（"pick something you like" 等）を自動フィルタリングします。</p>
+
+    <h3>Layer 3: SOUL.md &mdash; ペルソナエンジン</h3>
+    <p>これがOpenClawの人格の核心です。</p>
+    <div class="callout success">
+      <strong>SOUL.mdとは：</strong>エージェントの振る舞い原則を定義するファイルです。
+      システムプロンプトの「Project Context」セクションに注入され、
+      AIの応答スタイル全体を支配します。
+    </div>
+    <p>SOUL.mdテンプレートが定める主要原則：</p>
+    <ul>
+      <li><strong>"Be genuinely helpful, not performatively helpful"</strong> &mdash; 見せかけではなく本当に役立つ行動をする</li>
+      <li><strong>"Have opinions"</strong> &mdash; 意見を持ち、反対意見も表明する</li>
+      <li><strong>"Be resourceful before asking"</strong> &mdash; 質問する前にまず自分で調べる</li>
+      <li><strong>"Earn trust through competence"</strong> &mdash; 能力で信頼を獲得する</li>
+      <li><strong>"Remember you're a guest"</strong> &mdash; ユーザーの環境にお邪魔している意識を持つ</li>
+    </ul>
+    <p>特筆すべき点：SOUL.mdは<strong>「自己進化型」</strong>に設計されています。ファイル自体に「This file is yours to evolve（このファイルはあなた自身で進化させるもの）」と記載されています。</p>
+
+    <h2>初回オンボーディング（BOOTSTRAP.md）</h2>
+    <p><span class="file-ref">src/agents/workspace.ts</span></p>
+    <div class="callout warning">
+      <strong>パーソナル化の起点：</strong>初回起動時にBOOTSTRAP.mdが読み込まれ、
+      対話的な自己発見プロセスが始まります。
+    </div>
+    <p>BOOTSTRAP.mdの初回オンボーディングフロー：</p>
+    <ol>
+      <li>エージェントが起動し、「Hey. I just came online. Who am I? Who are you?」と自問する</li>
+      <li>ユーザーと対話しながら：名前、キャラクター種別、雰囲気、絵文字を協力して決定</li>
+      <li>IDENTITY.md、USER.md、SOUL.mdを更新</li>
+      <li>BOOTSTRAP.mdを削除 &mdash; 「You don't need a bootstrap script anymore — you're you now」</li>
+    </ol>
+    <p>
+      オンボーディング状態は <code>.openclaw/workspace-state.json</code> に
+      <code>bootstrapSeededAt</code> と <code>onboardingCompletedAt</code> として記録されます。
+    </p>
+
+    <h2>ブートストラップファイル群</h2>
+    <p><span class="file-ref">src/agents/workspace.ts:412-466</span></p>
+    <p>ワークスペースから読み込まれる標準ファイル群：</p>
+    <table>
+      <tr><th>ファイル</th><th>用途</th><th>サブエージェントに共有</th></tr>
+      <tr><td><code>AGENTS.md</code></td><td>ワークスペース指示、セッションプロトコル</td><td>はい</td></tr>
+      <tr><td><code>SOUL.md</code></td><td>人格・ペルソナ定義</td><td>いいえ</td></tr>
+      <tr><td><code>TOOLS.md</code></td><td>ツール利用ガイド</td><td>はい</td></tr>
+      <tr><td><code>IDENTITY.md</code></td><td>名前、キャラクター、絵文字</td><td>いいえ</td></tr>
+      <tr><td><code>USER.md</code></td><td>ユーザープロフィール（名前、タイムゾーン、好み）</td><td>いいえ</td></tr>
+      <tr><td><code>HEARTBEAT.md</code></td><td>定期チェックタスク</td><td>いいえ</td></tr>
+      <tr><td><code>BOOTSTRAP.md</code></td><td>初回オンボーディング（使用後削除）</td><td>いいえ</td></tr>
+      <tr><td><code>MEMORY.md</code></td><td>長期メモリ</td><td>いいえ</td></tr>
+    </table>
+    <div class="callout">
+      <strong>セキュリティ設計：</strong>サブエージェントとCronセッションには
+      <code>AGENTS.md</code> と <code>TOOLS.md</code> のみが共有され、
+      個人情報（USER.md、MEMORY.md等）は漏洩しません。
+      これは <code>filterBootstrapFilesForSession()</code> で制御されています。
+    </div>
+
+    <h3>ブートストラップファイルの制限</h3>
+    <p><span class="file-ref">src/agents/pi-embedded-helpers/bootstrap.ts</span></p>
+    <ul>
+      <li>ファイルあたり上限: <strong>20,000文字</strong></li>
+      <li>合計上限: <strong>150,000文字</strong></li>
+      <li>切り詰め戦略: 先頭70% + 末尾20% + 切り詰めマーカー</li>
+      <li>設定でカスタマイズ可能: <code>agents.defaults.bootstrapMaxChars</code></li>
+    </ul>
+
+    <h2>システムプロンプトの組み立てフロー</h2>
+    <p><span class="file-ref">src/agents/system-prompt.ts:169-639</span></p>
+    <p>
+      <code>buildAgentSystemPrompt()</code> が30以上のパラメータを受け取り、
+      以下のセクションを順番に組み立てます：
+    </p>
+
+    <h3>プロンプトモード</h3>
+    <table>
+      <tr><th>モード</th><th>用途</th><th>含まれるセクション</th></tr>
+      <tr><td><code>full</code></td><td>メインエージェント</td><td>すべて</td></tr>
+      <tr><td><code>minimal</code></td><td>サブエージェント</td><td>Tooling, Workspace, Runtimeのみ</td></tr>
+      <tr><td><code>none</code></td><td>最小</td><td>基本アイデンティティ行のみ</td></tr>
+    </table>
+
+    <h3>セクション一覧（組み立て順）</h3>
+    <div class="flow-diagram">
+システムプロンプト構成:
+
+"You are a personal assistant running inside OpenClaw."
+
+├── ## Tooling                    ← 利用可能ツール一覧 + 概要
+├── ## Tool Call Style            ← ツール呼び出し時のナレーション指針
+├── ## Safety                     ← 安全性規則（自己保存の禁止等）
+├── ## OpenClaw CLI Quick Reference ← CLIコマンドリファレンス
+├── ## Skills (mandatory)         ← スキルスキャン・読み込み指示
+├── ## Memory Recall              ← メモリ検索の利用指示
+├── ## OpenClaw Self-Update       ← セルフアップデート制御
+├── ## Model Aliases              ← モデルエイリアス
+├── ## Workspace                  ← 作業ディレクトリ情報
+├── ## Documentation              ← ドキュメントリンク
+├── ## Sandbox                    ← サンドボックス情報（有効時のみ）
+├── ## User Identity              ← オーナー電話番号
+├── ## Current Date & Time        ← タイムゾーン
+├── ## Workspace Files (injected) ← 注入ファイルヘッダー
+├── ## Reply Tags                 ← 返信タグ指示
+├── ## Messaging                  ← クロスセッションメッセージング
+├── ## Voice (TTS)                ← テキスト読み上げヒント
+├── ## Group Chat Context         ← グループチャットコンテキスト
+├── ## Reactions                  ← リアクション利用指針
+├── ## Reasoning Format           ← 思考タグフォーマット
+├── # Project Context             ← ★ ここにSOUL.md等が注入される
+│   ├── AGENTS.md
+│   ├── SOUL.md ← "embody its persona and tone"
+│   ├── TOOLS.md
+│   ├── USER.md
+│   ├── MEMORY.md
+│   └── IDENTITY.md
+├── ## Silent Replies             ← 無言応答トークン
+├── ## Heartbeats                 ← ハートビートACKプロトコル
+└── ## Runtime                    ← ランタイム情報行
+    </div>
+
+    <h2>アイデンティティ解決の階層</h2>
+    <p>メッセージプレフィックスやリアクション絵文字は、多層的な優先度で解決されます：</p>
+
+    <h3>ACKリアクション解決順</h3>
+    <ol>
+      <li><span class="tag primary">L1</span> チャンネルアカウントレベル（<code>channels.{channel}.accounts.{id}.ackReaction</code>）</li>
+      <li><span class="tag primary">L2</span> チャンネルレベル（<code>channels.{channel}.ackReaction</code>）</li>
+      <li><span class="tag primary">L3</span> グローバルレベル（<code>messages.ackReaction</code>）</li>
+      <li><span class="tag primary">L4</span> エージェントアイデンティティの絵文字フォールバック</li>
+      <li><span class="tag">デフォルト</span> 👀</li>
+    </ol>
+
+    <h3>メッセージプレフィックス解決順</h3>
+    <ol>
+      <li>明示的に設定されたプレフィックス</li>
+      <li><code>hasAllowFrom</code> が true → 空文字（プレフィックスなし）</li>
+      <li>アイデンティティ名をブラケット囲み（<code>[name]</code>）</li>
+      <li>フォールバック: <code>[openclaw]</code></li>
+    </ol>
+
+    <h2>プロンプトセキュリティ</h2>
+    <p><span class="file-ref">src/agents/sanitize-for-prompt.ts</span></p>
+    <p>
+      <code>sanitizeForPromptLiteral()</code> はプロンプトインジェクション対策として、
+      ワークスペースパス等の外部入力値から以下を除去します：
+    </p>
+    <ul>
+      <li>Unicode制御文字（Ccカテゴリ）</li>
+      <li>Unicode書式文字（Cfカテゴリ）</li>
+      <li>行区切り / 段落区切り（U+2028 / U+2029）</li>
+    </ul>
+    <p>これにより、攻撃者がディレクトリ名にプロンプト命令を埋め込む攻撃を防止します。</p>
+
+    <h2>システムプロンプトパラメータ解決</h2>
+    <p><span class="file-ref">src/agents/system-prompt-params.ts</span></p>
+    <p>
+      <code>buildSystemPromptParams()</code> が以下を解決します：
+    </p>
+    <ul>
+      <li><strong>runtimeInfo</strong> &mdash; エージェントID、ホスト名、OS、アーキテクチャ、Nodeバージョン、モデル、シェル、チャンネル、能力</li>
+      <li><strong>userTimezone</strong> &mdash; 設定 <code>agents.defaults.userTimezone</code> から</li>
+      <li><strong>repoRoot</strong> &mdash; 設定またはgit rootの自動検出</li>
+    </ul>
+
+    <h2>エージェントスコープ（マルチエージェント）</h2>
+    <p><span class="file-ref">src/agents/agent-scope.ts</span></p>
+    <p>
+      OpenClawは複数のエージェントを同時に運用できます。各エージェントは独立した設定を持ちます：
+    </p>
+    <ul>
+      <li>ワークスペース（デフォルト: <code>~/.openclaw/workspace</code>、他: <code>~/.openclaw/workspace-{id}</code>）</li>
+      <li>モデル・プロバイダ</li>
+      <li>スキル</li>
+      <li>アイデンティティ</li>
+      <li>サブエージェント設定</li>
+      <li>サンドボックス設定</li>
+      <li>ツールポリシー</li>
+    </ul>
+
+    <div class="page-nav">
+      <a href="01-overview.html">&larr; 全体概要</a>
+      <a href="03-agent-runtime.html">エージェントランタイム &rarr;</a>
+    </div>
+
+    <footer>
+      OpenClaw Architecture Analysis &mdash; 02. システムプロンプトとアイデンティティ
+    </footer>
+  </div>
+</body>
+</html>

@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>メモリ・知識システム - OpenClaw解析</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <nav class="breadcrumb">
+      <a href="index.html">トップ</a> &gt; メモリ・知識システム
+    </nav>
+
+    <header>
+      <h1>4. メモリ・知識システム</h1>
+      <p class="subtitle">長期記憶、セマンティック検索、Embedding、ハイブリッド検索</p>
+    </header>
+
+    <h2>概要</h2>
+    <p>
+      OpenClawのメモリシステムは、エージェントに<strong>永続的な記憶</strong>を与える
+      RAG（Retrieval-Augmented Generation）パイプラインです。
+      SQLiteデータベースにベクトル拡張（sqlite-vec）とFTS5（全文検索）を組み合わせた
+      ハイブリッド検索を実現し、「覚えている」AIアシスタントを可能にしています。
+    </p>
+
+    <h2>アーキテクチャ概要</h2>
+    <div class="flow-diagram">
+メモリシステム 3層アーキテクチャ:
+
+┌─────────────────────────────────────────────┐
+│           検索レイヤー                        │
+│  ハイブリッド検索 = ベクトル類似度 + BM25キーワード │
+│  + MMR多様性再ランキング + 時間的減衰         │
+├─────────────────────────────────────────────┤
+│           インデックスレイヤー                  │
+│  ファイル監視 + セッション監視 + チャンキング    │
+│  + Embedding生成 + 同期オーケストレーション     │
+├─────────────────────────────────────────────┤
+│           ストレージレイヤー                    │
+│  SQLite + sqlite-vec (ベクトル検索)           │
+│         + FTS5 (全文検索)                    │
+└─────────────────────────────────────────────┘
+    </div>
+
+    <h2>メモリソース</h2>
+    <p><span class="file-ref">src/memory/types.ts</span></p>
+    <table>
+      <tr><th>ソース</th><th>内容</th><th>デフォルト</th></tr>
+      <tr>
+        <td><span class="tag green">memory</span></td>
+        <td>MEMORY.md, memory.md, memory/ディレクトリのMarkdownファイル</td>
+        <td>有効</td>
+      </tr>
+      <tr>
+        <td><span class="tag orange">sessions</span></td>
+        <td>過去の会話トランスクリプト（JSONLファイル）</td>
+        <td>無効（<code>experimental.sessionMemory: true</code> で有効化）</td>
+      </tr>
+    </table>
+
+    <h2>ストレージアーキテクチャ</h2>
+    <p><span class="file-ref">src/memory/sqlite.ts</span></p>
+    <p>
+      Node.jsの実験的組み込みモジュール <code>node:sqlite</code> を使用。
+      DBは <code>~/.openclaw/state/memory/{agentId}.sqlite</code> に保存されます。
+    </p>
+    <table>
+      <tr><th>テーブル</th><th>用途</th></tr>
+      <tr><td><code>files</code></td><td>インデックス対象ファイルのメタデータ</td></tr>
+      <tr><td><code>chunks</code></td><td>テキストチャンク（ID、パス、開始/終了行、ハッシュ、モデル、テキスト、Embedding）</td></tr>
+      <tr><td><code>chunks_vec</code></td><td>ベクトル検索用仮想テーブル（vec0）</td></tr>
+      <tr><td><code>chunks_fts</code></td><td>全文検索用テーブル（FTS5）</td></tr>
+      <tr><td><code>embedding_cache</code></td><td>Embeddingのキャッシュ（コンテンツハッシュ→ベクトル）</td></tr>
+      <tr><td><code>meta</code></td><td>メタデータ（モデル、プロバイダ、チャンク設定）</td></tr>
+    </table>
+
+    <h2>Embeddingプロバイダ</h2>
+    <p><span class="file-ref">src/memory/embeddings.ts</span></p>
+    <table>
+      <tr><th>プロバイダ</th><th>モデル</th><th>優先度（autoモード）</th></tr>
+      <tr><td>ローカル</td><td><code>embeddinggemma-300m-qat-Q8_0.gguf</code></td><td>1（最優先）</td></tr>
+      <tr><td>OpenAI</td><td><code>text-embedding-3-small</code></td><td>2</td></tr>
+      <tr><td>Gemini</td><td><code>gemini-embedding-001</code></td><td>3</td></tr>
+      <tr><td>Voyage</td><td><code>voyage-4-large</code></td><td>4</td></tr>
+    </table>
+    <div class="callout">
+      <strong>優雅な劣化：</strong>すべてのプロバイダが利用不可の場合、システムは<strong>FTS-onlyモード</strong>
+      （キーワード検索のみ）に自動フォールバックします。
+      sqlite-vecが利用不可の場合はブルートフォースコサイン類似度計算にフォールバック。
+      メモリ検索は常に何らかのレベルで機能します。
+    </div>
+    <p>すべてのEmbeddingは <code>sanitizeAndNormalizeEmbedding()</code> でL2正規化（単位ベクトル化）されます。</p>
+
+    <h2>チャンキングシステム</h2>
+    <p><span class="file-ref">src/memory/internal.ts:167-248</span></p>
+
+    <h3>Markdownチャンキング</h3>
+    <ul>
+      <li>行単位で分割、デフォルトチャンクサイズ: <strong>400トークン（約1,600文字）</strong></li>
+      <li>オーバーラップ: <strong>80トークン</strong>（チャンク境界のコンテキスト保持）</li>
+      <li>長い行はチャンクサイズ境界でセグメントに分割</li>
+      <li>各チャンクにstartLine/endLineとテキストのSHA-256ハッシュを付与</li>
+    </ul>
+
+    <h3>セッションファイル処理</h3>
+    <p><span class="file-ref">src/memory/session-files.ts:74-131</span></p>
+    <ul>
+      <li>JSONLトランスクリプトを解析し、ユーザー/アシスタントメッセージを抽出</li>
+      <li><code>redactSensitiveText()</code> で機密テキストを自動編集</li>
+      <li><code>lineMap</code> でコンテンツ行をオリジナルJSONL行番号にマッピング</li>
+    </ul>
+
+    <h2>ハイブリッド検索パイプライン</h2>
+    <p><span class="file-ref">src/memory/manager.ts:203-289</span></p>
+
+    <div class="flow-diagram">
+検索クエリ
+    │
+    ├─ [Embeddingあり] ──────────────────────────┐
+    │  │                                         │
+    │  ▼ ベクトル検索                              ▼ キーワード検索
+    │  embed(query) → cosine距離                  tokenize → FTS5 BM25
+    │  score = 1 - cosine_distance               score = 1/(1+rank)
+    │  │                                         │
+    │  └─────────┬───────────────────────────────┘
+    │            ▼
+    │  ハイブリッドマージ
+    │  score = 0.7 × vectorScore + 0.3 × textScore
+    │            │
+    │            ▼ 時間的減衰適用（有効時）
+    │            ▼ MMR多様性再ランキング（有効時）
+    │            ▼ minScore=0.35 フィルタ
+    │            ▼ maxResults=6 制限
+    │            │
+    │            ▼ 結果返却
+    │
+    ├─ [Embeddingなし（FTS-onlyモード）] ─────────┐
+    │  │                                         │
+    │  ▼ extractKeywords()                       │
+    │  各キーワードで独立検索                      │
+    │  結果をマージ・重複排除                      │
+    │  │                                         │
+    │  └──────────────────────────► 結果返却
+    </div>
+
+    <h3>ベクトル検索</h3>
+    <p><span class="file-ref">src/memory/manager-search.ts:20-94</span></p>
+    <ul>
+      <li>sqlite-vec拡張あり: <code>vec_distance_cosine()</code> SQL関数で高速近傍検索</li>
+      <li>sqlite-vec拡張なし: 全チャンクに対するブルートフォースコサイン類似度計算</li>
+      <li>スコア = <code>1 - cosine_distance</code></li>
+    </ul>
+
+    <h3>キーワード検索</h3>
+    <p><span class="file-ref">src/memory/manager-search.ts:136-191</span>、<span class="file-ref">src/memory/hybrid.ts:33-44</span></p>
+    <ul>
+      <li>FTS5クエリを構築：トークン化 → クォート付きAND結合（例: <code>"API" AND "endpoint"</code>）</li>
+      <li>BM25ランキングを利用</li>
+      <li>スコア変換: <code>1/(1+rank)</code></li>
+    </ul>
+
+    <h3>ハイブリッドマージ</h3>
+    <p><span class="file-ref">src/memory/hybrid.ts:51-149</span></p>
+    <ul>
+      <li>チャンクIDでベクトル結果とキーワード結果を統合</li>
+      <li>重み付きスコア: <code>score = 0.7 × vectorScore + 0.3 × textScore</code></li>
+      <li>最小スコア: 0.35（これ以下は除外）</li>
+      <li>最大結果数: 6</li>
+    </ul>
+
+    <h2>時間的減衰（Temporal Decay）</h2>
+    <p><span class="file-ref">src/memory/temporal-decay.ts</span></p>
+    <div class="callout success">
+      <strong>人間的な記憶を模倣：</strong>「最近の記憶ほど鮮明」という特性を数学的に実装しています。
+    </div>
+    <ul>
+      <li><strong>指数減衰</strong>: <code>multiplier = e^(-&lambda; &times; ageInDays)</code></li>
+      <li><strong>&lambda;</strong> = <code>ln(2) / halfLifeDays</code></li>
+      <li><strong>デフォルト半減期</strong>: 30日（30日でスコアが半減）</li>
+    </ul>
+
+    <h3>スマートタイムスタンプ抽出</h3>
+    <table>
+      <tr><th>ファイルタイプ</th><th>タイムスタンプ</th><th>減衰</th></tr>
+      <tr><td>日付付きファイル（<code>memory/YYYY-MM-DD.md</code>）</td><td>パスから日付を解析</td><td><span class="tag orange">あり</span></td></tr>
+      <tr><td>エバーグリーンファイル（<code>MEMORY.md</code>等）</td><td>なし（null返却）</td><td><span class="tag green">なし</span></td></tr>
+      <tr><td>その他のファイル</td><td>ファイルシステムのmtime</td><td><span class="tag orange">あり</span></td></tr>
+    </table>
+    <p>
+      <strong>核心設計</strong>：コアナレッジ（MEMORY.md）は永久に減衰しませんが、
+      日々のノートは時間とともに関連性が低下します。
+    </p>
+
+    <h2>MMR多様性再ランキング</h2>
+    <p><span class="file-ref">src/memory/mmr.ts</span></p>
+    <p>
+      Maximal Marginal Relevance（Carbonell &amp; Goldstein, 1998）アルゴリズムにより、
+      検索結果の多様性を確保します。
+    </p>
+    <ul>
+      <li>計算式: <code>MMR = &lambda; &times; relevance - (1-&lambda;) &times; max_similarity_to_selected</code></li>
+      <li>デフォルト &lambda; = 0.7（関連性を多様性より優先）</li>
+      <li>類似度: トークン化コンテンツのJaccard係数で測定</li>
+      <li>反復的に「関連性が高く、かつ既選択項目と異なる」ものを選択</li>
+    </ul>
+
+    <h2>クエリ拡張</h2>
+    <p><span class="file-ref">src/memory/query-expansion.ts</span></p>
+    <p>FTS-onlyモード用のクエリ前処理：</p>
+    <ul>
+      <li>英語・中国語のストップワードフィルタリング（英語約120語、中国語約70語）</li>
+      <li>CJK処理: 文字レベルのユニグラム + バイグラムでフレーズマッチング</li>
+      <li>オプション: LLMベースのクエリ拡張（<code>expandQueryWithLlm()</code>）</li>
+      <li>例: 「that thing we discussed about the API」→ <code>["discussed", "API"]</code></li>
+    </ul>
+
+    <h2>同期・インデックスパイプライン</h2>
+    <p><span class="file-ref">src/memory/manager-sync-ops.ts</span></p>
+
+    <h3>同期トリガー</h3>
+    <table>
+      <tr><th>トリガー</th><th>タイミング</th></tr>
+      <tr><td>セッション開始</td><td>新しい会話が始まるとき</td></tr>
+      <tr><td>検索時</td><td>ダーティなら検索前に同期</td></tr>
+      <tr><td>ファイルウォッチャー</td><td>Chokidarによる監視、1.5秒デバウンス</td></tr>
+      <tr><td>セッションリスナー</td><td>トランスクリプト更新（100KB or 50メッセージの差分閾値）</td></tr>
+      <tr><td>インターバルタイマー</td><td>設定された周期での定期同期</td></tr>
+    </table>
+
+    <h3>同期プロセス</h3>
+    <ol>
+      <li>ベクトル拡張の読み込み（必要時）</li>
+      <li>メタデータチェック（モデル変更、プロバイダ変更、チャンク設定変更→フルリインデックス）</li>
+      <li>メモリファイル: .mdファイルを列挙、変更されたファイルをインデックス（ハッシュ比較）</li>
+      <li>セッションファイル: JSONLトランスクリプトを列挙、ダーティファイルをインデックス</li>
+      <li>古いインデックスパスを削除（存在しないファイル）</li>
+      <li><strong>安全なリインデックス</strong>: 一時DBで新インデックスを構築 → ファイルリネームでアトミックに交換</li>
+    </ol>
+
+    <h3>Embeddingキャッシング</h3>
+    <p><span class="file-ref">src/memory/manager-embedding-ops.ts:77-175</span></p>
+    <ul>
+      <li>コンテンツハッシュで <code>embedding_cache</code> テーブルにキャッシュ</li>
+      <li>インデックス時: まずキャッシュを確認、欠損チャンクのみEmbedding生成</li>
+      <li>LRU退去: キャッシュが最大エントリ数を超えたら古いものから削除</li>
+    </ul>
+
+    <h3>バッチEmbedding</h3>
+    <p><span class="file-ref">src/memory/manager-embedding-ops.ts:246-494</span></p>
+    <ul>
+      <li>OpenAI、Gemini、VoyageのバッチAPIをサポート</li>
+      <li>バッチごとに8,000トークン上限</li>
+      <li>レート制限時は指数バックオフでリトライ</li>
+      <li>2回失敗後にバッチを自動無効化し、個別Embeddingにフォールバック</li>
+    </ul>
+
+    <h2>パーソナルアシスタントとしてのメモリの意義</h2>
+    <ol>
+      <li><strong>永続的知識ベース</strong> &mdash; MEMORY.mdとmemory/ディレクトリがセッション横断で蓄積される</li>
+      <li><strong>セッション想起</strong> &mdash; 過去の会話を検索可能にし「あのAPIについて話したとき」の想起を実現</li>
+      <li><strong>エバーグリーン vs 時限的知識</strong> &mdash; コア知識は永遠に保持、日付付きノートは徐々に忘却</li>
+      <li><strong>ワークスペーススコープ</strong> &mdash; エージェント+ワークスペースごとに独立したインデックス</li>
+      <li><strong>自動同期</strong> &mdash; ファイルウォッチャーとセッションリスナーで常に最新</li>
+      <li><strong>プライバシー配慮</strong> &mdash; セッションコンテンツは編集済み、toolResult.detailsは要約から除去</li>
+    </ol>
+
+    <div class="page-nav">
+      <a href="03-agent-runtime.html">&larr; エージェントランタイム</a>
+      <a href="05-autonomous.html">自律的行動システム &rarr;</a>
+    </div>
+
+    <footer>
+      OpenClaw Architecture Analysis &mdash; 04. メモリ・知識システム
+    </footer>
+  </div>
+</body>
+</html>

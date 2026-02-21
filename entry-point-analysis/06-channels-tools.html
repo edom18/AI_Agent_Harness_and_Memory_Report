@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>マルチチャンネルとツール - OpenClaw解析</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <nav class="breadcrumb">
+      <a href="index.html">トップ</a> &gt; マルチチャンネルとツール
+    </nav>
+
+    <header>
+      <h1>6. マルチチャンネルとツール</h1>
+      <p class="subtitle">チャンネル抽象化、メッセージルーティング、ツールシステム、スキル</p>
+    </header>
+
+    <h2>マルチチャンネルアーキテクチャ</h2>
+
+    <h3>チャンネルレジストリ</h3>
+    <p><span class="file-ref">src/channels/registry.ts</span></p>
+    <p>8つのコアチャンネルが定義されています：</p>
+    <table>
+      <tr><th>チャンネル</th><th>ライブラリ</th><th>テキスト上限</th></tr>
+      <tr><td>Telegram</td><td>grammY</td><td>4,000文字</td></tr>
+      <tr><td>WhatsApp</td><td>Baileys</td><td>4,000文字</td></tr>
+      <tr><td>Discord</td><td>discord.js</td><td>2,000文字</td></tr>
+      <tr><td>Slack</td><td>@slack/bolt</td><td>4,000文字</td></tr>
+      <tr><td>Signal</td><td>signal-cli</td><td>4,000文字</td></tr>
+      <tr><td>iMessage</td><td>imsg / BlueBubbles</td><td>4,000文字</td></tr>
+      <tr><td>Google Chat</td><td>Chat API</td><td>4,000文字</td></tr>
+      <tr><td>IRC</td><td>-</td><td>350文字</td></tr>
+    </table>
+    <p>拡張チャンネル（プラグイン方式）：Microsoft Teams、Matrix、Zalo、Zalo Personal、WebChat</p>
+
+    <h3>Dockシステム（軽量メタデータ抽象化）</h3>
+    <p><span class="file-ref">src/channels/dock.ts</span></p>
+    <div class="callout">
+      <strong>Dockパターン：</strong>各チャンネルの重たいプラグイン実装とは分離された、
+      軽量な振る舞いメタデータです。共有コードはDockを参照し、
+      実行パスのみがフルプラグインを使用します。
+    </div>
+    <p><code>ChannelDock</code>が定義する各チャンネルの振る舞い：</p>
+    <ul>
+      <li><code>capabilities</code> &mdash; チャットタイプ（DM/グループ/チャンネル/スレッド）、ポール、リアクション、編集、送信取消、メディア、ネイティブコマンド等</li>
+      <li><code>outbound</code> &mdash; テキストチャンク制限（チャンネルごとに異なる）</li>
+      <li><code>streaming</code> &mdash; ストリーミング合体設定（最小文字数、アイドル時間等）</li>
+      <li><code>groups</code> &mdash; グループメンション要件、ツールポリシー</li>
+      <li><code>mentions</code> &mdash; メンション除去パターン（チャンネル固有）</li>
+      <li><code>threading</code> &mdash; リプライモード、スレッドコンテキスト</li>
+      <li><code>agentPrompt</code> &mdash; チャンネル固有のプロンプトヒント</li>
+    </ul>
+
+    <h3>チャンネルプラグイン契約</h3>
+    <p><span class="file-ref">src/channels/plugins/types.plugin.ts</span></p>
+    <p><code>ChannelPlugin</code>インターフェースは20以上のアダプタを定義：</p>
+    <table>
+      <tr><th>アダプタ</th><th>役割</th></tr>
+      <tr><td><code>config</code></td><td>アカウント解決、allowFrom</td></tr>
+      <tr><td><code>setup</code></td><td>チャンネルセットアップウィザード</td></tr>
+      <tr><td><code>pairing</code></td><td>デバイスペアリング（WhatsApp QR等）</td></tr>
+      <tr><td><code>security</code></td><td>DMポリシー、許可リスト</td></tr>
+      <tr><td><code>groups</code></td><td>グループメンション要件、ツールポリシー</td></tr>
+      <tr><td><code>mentions</code></td><td>メンション除去パターン</td></tr>
+      <tr><td><code>outbound</code></td><td>メッセージ送信</td></tr>
+      <tr><td><code>threading</code></td><td>リプライモード、スレッドコンテキスト</td></tr>
+      <tr><td><code>actions</code></td><td>メッセージアクション処理</td></tr>
+      <tr><td><code>directory</code></td><td>連絡先/チャンネルディレクトリ</td></tr>
+    </table>
+
+    <h3>チャンネルごとの行動適応</h3>
+    <h4>メンション除去</h4>
+    <table>
+      <tr><th>チャンネル</th><th>除去パターン</th></tr>
+      <tr><td>Discord</td><td><code>&lt;@!?\d+&gt;</code></td></tr>
+      <tr><td>WhatsApp</td><td>自分の電話番号メンション</td></tr>
+      <tr><td>Slack</td><td><code>&lt;@[^&gt;]+&gt;</code></td></tr>
+    </table>
+
+    <h4>ストリーミング合体</h4>
+    <p>チャンネルごとに異なる設定。例えばDiscordは <code>minChars=1500, idleMs=1000</code>。</p>
+
+    <h3>セッション管理</h3>
+    <p><span class="file-ref">src/channels/session.ts</span></p>
+    <p>
+      <code>recordInboundSession()</code> が受信メッセージのセッションメタデータ
+      （lastChannel、to、accountId、threadId）を記録し、
+      返信のルーティングに使用します。
+    </p>
+
+    <h2>ツールシステム</h2>
+
+    <h3>ツール組み立て</h3>
+    <p><span class="file-ref">src/agents/pi-tools.ts:164-507</span></p>
+    <p>
+      <code>createOpenClawCodingTools()</code> が複数のソースからツールを組み立てます：
+    </p>
+    <div class="flow-diagram">
+ツール組み立てパイプライン:
+
+1. ベースコーディングツール (pi-coding-agent SDK)
+   └── read, write, edit
+
+2. Exec/Processツール (bash-tools)
+   └── exec, process
+
+3. Apply Patchツール (OpenAIプロバイダのみ)
+
+4. チャンネルエージェントツール
+   └── ログインフロー等
+
+5. OpenClawネイティブツール
+   └── browser, canvas, nodes, cron, message, tts, gateway,
+       agents_list, sessions_*, subagents, session_status,
+       web_search, web_fetch, image
+
+6. プラグインツール
+    </div>
+
+    <h3>ツールポリシーパイプライン</h3>
+    <p><span class="file-ref">src/agents/pi-tools.ts:462-485</span></p>
+    <p>マルチレイヤーのセキュリティフィルタリングがツールへのアクセスを制御します：</p>
+    <ol>
+      <li><span class="tag primary">L1</span> <strong>オーナー専用ポリシー</strong> &mdash; whatsapp_login, cron, gateway はオーナーのみ</li>
+      <li><span class="tag primary">L2</span> <strong>プロファイルポリシー</strong> &mdash; minimal/coding/messaging/full</li>
+      <li><span class="tag primary">L3</span> <strong>プロバイダ固有ポリシー</strong></li>
+      <li><span class="tag primary">L4</span> <strong>グローバルポリシー</strong></li>
+      <li><span class="tag primary">L5</span> <strong>エージェント固有ポリシー</strong></li>
+      <li><span class="tag primary">L6</span> <strong>グループポリシー</strong> &mdash; チャンネル/グループごとの制限</li>
+      <li><span class="tag primary">L7</span> <strong>サンドボックスポリシー</strong></li>
+      <li><span class="tag primary">L8</span> <strong>サブエージェントポリシー</strong> &mdash; 深度に基づく制限</li>
+    </ol>
+
+    <h3>ツールプロファイル</h3>
+    <p><span class="file-ref">src/agents/tool-policy.ts:65-80</span></p>
+    <table>
+      <tr><th>プロファイル</th><th>含まれるツール</th></tr>
+      <tr><td><code>minimal</code></td><td>session_status のみ</td></tr>
+      <tr><td><code>coding</code></td><td>ファイルシステム、ランタイム、セッション、メモリ、イメージ</td></tr>
+      <tr><td><code>messaging</code></td><td>メッセージング、sessions_list/history/send、session_status</td></tr>
+      <tr><td><code>full</code></td><td>すべてのツール</td></tr>
+    </table>
+
+    <h3>ツールグループ</h3>
+    <table>
+      <tr><th>グループ</th><th>ツール</th></tr>
+      <tr><td><code>group:memory</code></td><td>memory_search, memory_get</td></tr>
+      <tr><td><code>group:web</code></td><td>web_search, web_fetch</td></tr>
+      <tr><td><code>group:fs</code></td><td>read, write, edit, grep, find, ls, apply_patch</td></tr>
+      <tr><td><code>group:runtime</code></td><td>exec, process</td></tr>
+      <tr><td><code>group:sessions</code></td><td>sessions_list/history/send/spawn, subagents, session_status</td></tr>
+      <tr><td><code>group:ui</code></td><td>browser, canvas</td></tr>
+      <tr><td><code>group:automation</code></td><td>cron</td></tr>
+      <tr><td><code>group:messaging</code></td><td>message</td></tr>
+      <tr><td><code>group:nodes</code></td><td>nodes</td></tr>
+      <tr><td><code>group:openclaw</code></td><td>gateway, agents_list</td></tr>
+    </table>
+
+    <h3>主要ツール一覧</h3>
+    <table>
+      <tr><th>ツール</th><th>ファイル</th><th>説明</th></tr>
+      <tr><td><code>browser</code></td><td>tools/browser-tool.ts</td><td>ブラウザ制御（ナビゲーション、アクション、スクリーンショット、PDF）</td></tr>
+      <tr><td><code>canvas</code></td><td>tools/canvas-tool.ts</td><td>UIキャンバス制御（A2UI push/reset、eval、snapshot）</td></tr>
+      <tr><td><code>nodes</code></td><td>tools/nodes-tool.ts</td><td>ノードデバイス管理</td></tr>
+      <tr><td><code>cron</code></td><td>tools/cron-tool.ts</td><td>スケジュールタスク管理</td></tr>
+      <tr><td><code>message</code></td><td>tools/message-tool.ts</td><td>53のアクションを持つユニバーサルメッセージングツール</td></tr>
+      <tr><td><code>tts</code></td><td>tools/tts-tool.ts</td><td>テキスト読み上げ</td></tr>
+      <tr><td><code>gateway</code></td><td>tools/gateway-tool.ts</td><td>Gateway API呼び出し</td></tr>
+      <tr><td><code>sessions_spawn</code></td><td>tools/sessions-spawn-tool.ts</td><td>バックグラウンドサブエージェント生成</td></tr>
+      <tr><td><code>web_search</code></td><td>tools/web-search.ts</td><td>Web検索</td></tr>
+      <tr><td><code>web_fetch</code></td><td>tools/web-fetch.ts</td><td>Webページ取得・処理</td></tr>
+      <tr><td><code>image</code></td><td>tools/image-tool.ts</td><td>ビジョンモデルによる画像理解</td></tr>
+    </table>
+
+    <h3>messageツール &mdash; ユニバーサルメッセージングインターフェース</h3>
+    <p><span class="file-ref">src/agents/tools/message-tool.ts</span></p>
+    <p>
+      <code>message</code>ツールは<strong>53種類のアクション</strong>をサポートするユニバーサルメッセージングインターフェースです。
+      現在のチャンネルの能力に応じてJSONスキーマが動的に適応します。
+    </p>
+    <p>主要アクション例：</p>
+    <ul>
+      <li><code>send</code>, <code>broadcast</code> &mdash; メッセージ送信</li>
+      <li><code>poll</code> &mdash; 投票作成</li>
+      <li><code>react</code> &mdash; リアクション</li>
+      <li><code>edit</code>, <code>unsend</code> &mdash; 編集・送信取消</li>
+      <li><code>reply</code>, <code>thread-create</code> &mdash; 返信・スレッド作成</li>
+      <li><code>kick</code>, <code>ban</code>, <code>timeout</code> &mdash; モデレーション</li>
+      <li><code>sticker</code>, <code>presence</code> &mdash; その他</li>
+    </ul>
+
+    <h2>スキルシステム</h2>
+    <p><span class="file-ref">src/agents/skills.ts</span>、<span class="file-ref">src/agents/skills/workspace.ts</span></p>
+
+    <h3>スキルの読み込み優先順位（後から上書き）</h3>
+    <ol>
+      <li>追加ディレクトリ（<code>config.skills.load.extraDirs</code>）</li>
+      <li>バンドルスキル（OpenClawに同梱）</li>
+      <li>マネージドスキル（<code>~/.config/openclaw/skills/</code>）</li>
+      <li>パーソナルエージェントスキル（<code>~/.agents/skills/</code>）</li>
+      <li>プロジェクトエージェントスキル（<code>.agents/skills/</code> in workspace）</li>
+      <li>ワークスペーススキル（<code>skills/</code> in workspace）</li>
+    </ol>
+
+    <h3>スキルの制限</h3>
+    <ul>
+      <li>ルートごと最大300候補</li>
+      <li>ソースごと最大200ロード</li>
+      <li>プロンプト内最大150スキル</li>
+      <li>プロンプト予算: 30,000文字</li>
+      <li>スキルファイルサイズ上限: 256KB</li>
+    </ul>
+
+    <h3>50以上のバンドルスキル例</h3>
+    <table>
+      <tr><th>カテゴリ</th><th>スキル例</th></tr>
+      <tr><td>統合</td><td>github, discord, slack, spotify-player, trello, notion, obsidian, 1password</td></tr>
+      <tr><td>メディア</td><td>openai-image-gen, openai-whisper, video-frames, gifgrep, camsnap</td></tr>
+      <tr><td>ユーティリティ</td><td>weather, food-order, summarize, healthcheck, session-logs</td></tr>
+      <tr><td>コミュニケーション</td><td>voice-call, wacli (WhatsApp CLI), blucli (BlueBubbles)</td></tr>
+      <tr><td>開発</td><td>coding-agent, skill-creator, mcporter, gh-issues</td></tr>
+    </table>
+
+    <h2>チャンネルシステムがパーソナルアシスタントを可能にする仕組み</h2>
+    <ol>
+      <li><strong>統一アイデンティティ</strong> &mdash; 全プラットフォームで単一の人格を維持しつつ、メッセージフォーマットをチャンネルに適応</li>
+      <li><strong>セッション継続性</strong> &mdash; <code>recordInboundSession()</code>でユーザーの通信チャンネル/スレッドを追跡</li>
+      <li><strong>ラストルート配信</strong> &mdash; messageツールが明示的ターゲットなしでユーザーの最新チャンネルに送信可能</li>
+      <li><strong>チャンネル横断メッセージング</strong> &mdash; Telegramで受信 → Discordで返信、チャンネル間リレーが可能</li>
+      <li><strong>グループごとのツールポリシー</strong> &mdash; DMではフルツール、公開グループでは制限付き</li>
+      <li><strong>オーナー専用セキュリティ</strong> &mdash; 機密操作（login、cron、gateway）は検証済みオーナーのみ</li>
+    </ol>
+
+    <div class="page-nav">
+      <a href="05-autonomous.html">&larr; 自律的行動</a>
+      <a href="07-reading-guide.html">コードリーディングガイド &rarr;</a>
+    </div>
+
+    <footer>
+      OpenClaw Architecture Analysis &mdash; 06. マルチチャンネルとツール
+    </footer>
+  </div>
+</body>
+</html>

@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>全体概要とアーキテクチャ - OpenClaw解析</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <nav class="breadcrumb">
+      <a href="index.html">トップ</a> &gt; 全体概要とアーキテクチャ
+    </nav>
+
+    <header>
+      <h1>1. 全体概要とアーキテクチャ</h1>
+      <p class="subtitle">エントリポイント、起動シーケンス、主要コンポーネントの関係性</p>
+    </header>
+
+    <h2>プロジェクトの全体像</h2>
+    <p>
+      OpenClawは「パーソナルAIアシスタント」を自分のデバイスで動かすためのプロダクトです。
+      WhatsApp、Telegram、Discord、Slack、Signal、iMessageなど複数のメッセージングプラットフォームを統合し、
+      単一のAIエージェントとして動作します。
+    </p>
+
+    <h3>コアコンセプト</h3>
+    <ul>
+      <li><strong>Gateway</strong> &mdash; WebSocket + HTTPサーバーとして動作するコントロールプレーン。すべてのセッション、チャンネル、ツール、イベントを管理する</li>
+      <li><strong>PI Agent Runtime</strong> &mdash; プロセス内で動作するAIエージェントランタイム。LLM呼び出し、ツール実行、セッション管理を担う</li>
+      <li><strong>Channel Plugins</strong> &mdash; 各メッセージングプラットフォームへの接続を抽象化するプラグイン</li>
+      <li><strong>Memory System</strong> &mdash; セマンティック検索 + キーワード検索によるハイブリッドメモリ</li>
+    </ul>
+
+    <h2>ディレクトリ構造</h2>
+    <p>主要なソースディレクトリとその役割：</p>
+    <table>
+      <tr><th>ディレクトリ</th><th>役割</th></tr>
+      <tr><td><code>src/agents/</code></td><td>AIエージェントランタイム全体（プロンプト構築、ツール定義、セッション管理、サブエージェント）</td></tr>
+      <tr><td><code>src/auto-reply/</code></td><td>受信メッセージに対する自動応答パイプライン</td></tr>
+      <tr><td><code>src/channels/</code></td><td>チャンネル抽象化レイヤー（レジストリ、Dock、ルーティング）</td></tr>
+      <tr><td><code>src/cli/</code></td><td>CLIフレームワーク（Commander.js ベース）</td></tr>
+      <tr><td><code>src/commands/</code></td><td>CLIコマンド実装</td></tr>
+      <tr><td><code>src/config/</code></td><td>設定システム（JSON5、Zodバリデーション、環境変数置換）</td></tr>
+      <tr><td><code>src/cron/</code></td><td>スケジュールタスク（Cronジョブサービス）</td></tr>
+      <tr><td><code>src/daemon/</code></td><td>OSサービス管理（launchd/systemd/schtasks）</td></tr>
+      <tr><td><code>src/discord/</code></td><td>Discord統合</td></tr>
+      <tr><td><code>src/gateway/</code></td><td>WebSocket Gatewayサーバー</td></tr>
+      <tr><td><code>src/hooks/</code></td><td>ライフサイクルフック（Pub/Sub）</td></tr>
+      <tr><td><code>src/memory/</code></td><td>メモリシステム（SQLite + ベクトル検索 + FTS5）</td></tr>
+      <tr><td><code>src/process/</code></td><td>プロセス監視（子プロセス管理、PTY）</td></tr>
+      <tr><td><code>src/routing/</code></td><td>メッセージルーティング</td></tr>
+      <tr><td><code>src/telegram/</code></td><td>Telegram統合</td></tr>
+      <tr><td><code>src/whatsapp/</code>, <code>src/web/</code></td><td>WhatsApp統合</td></tr>
+      <tr><td><code>skills/</code></td><td>50以上のスキル定義</td></tr>
+      <tr><td><code>extensions/</code></td><td>チャンネル拡張（MS Teams, Matrix, Zalo等）</td></tr>
+    </table>
+
+    <h2>エントリポイントと起動シーケンス</h2>
+    <p>OpenClawの起動は以下のフローで進みます：</p>
+
+    <h3>Step 1: CLIエントリポイント</h3>
+    <p>
+      <span class="file-ref">src/entry.ts</span> がメインエントリポイントです。
+    </p>
+    <ol>
+      <li><code>process.title = "openclaw"</code> でプロセス名を設定</li>
+      <li>実験的警告の抑制チェック &mdash; 必要であればNode.jsフラグ付きで自身を再スポーン</li>
+      <li>CLIプロファイル引数の解析</li>
+      <li><code>import("./cli/run-main.js")</code> で <code>runCli()</code> を動的インポート・実行</li>
+    </ol>
+
+    <h3>Step 2: CLI初期化</h3>
+    <p>
+      <span class="file-ref">src/cli/run-main.ts</span> の <code>runCli()</code> が次のフェーズを担います：
+    </p>
+    <ol>
+      <li><code>.env</code> ファイルの読み込みと環境変数の正規化</li>
+      <li><strong>高速ルート</strong>：<code>tryRouteCli()</code> でコマンドが高速パスに該当するか確認</li>
+      <li><strong>通常ルート</strong>：Commander.js プログラムの構築
+        <ul>
+          <li>プライマリコマンドモジュールの遅延登録</li>
+          <li>25以上のサブCLI（gateway, daemon, acp, cron 等）の遅延登録</li>
+          <li>プラグインCLIコマンドの登録</li>
+        </ul>
+      </li>
+      <li>Commander によるコマンド解析・実行</li>
+    </ol>
+
+    <h3>Step 3: Gatewayサーバー起動</h3>
+    <p>
+      <code>openclaw gateway run</code> コマンドにより、
+      <span class="file-ref">src/gateway/server.impl.ts</span> の <code>startGatewayServer()</code> が呼ばれます。
+    </p>
+    <div class="flow-diagram">
+Gateway起動シーケンス:
+
+1. 設定ファイル読み込み・バリデーション
+2. プラグイン自動有効化（環境変数ベース）
+3. Gateway認証トークン生成
+4. 診断ハートビート開始
+5. サブエージェントレジストリ初期化
+6. デフォルトエージェントID・ワークスペース解決
+7. Gatewayプラグイン読み込み
+8. チャンネルプラグイン初期化
+   ├── Telegram (grammY)
+   ├── Discord (discord.js)
+   ├── Slack (@slack/bolt)
+   ├── WhatsApp (Baileys)
+   ├── Signal (signal-cli)
+   ├── iMessage
+   └── 拡張チャンネル (MS Teams, Matrix等)
+9. 認証レートリミッター作成
+10. Control UI（Webダッシュボード）セットアップ
+11. HTTP/WebSocketサーバー起動
+12. チャンネル健全性モニター開始
+13. 設定リローダー開始
+14. Cronサービス開始
+15. Boot.md実行（初回起動タスク）
+    </div>
+
+    <h2>設定システム</h2>
+    <p>
+      設定は <span class="file-ref">src/config/</span> 以下で管理され、
+      主設定ファイルは <code>~/.openclaw/openclaw.json</code>（JSON5形式）です。
+    </p>
+    <h3>設定の読み込みフロー</h3>
+    <ol>
+      <li>JSON5ファイルの読み込み</li>
+      <li>環境変数の置換（<code>${ENV_VAR}</code>形式）</li>
+      <li>Config includesの適用（組み合わせ可能な設定）</li>
+      <li>環境変数オーバーライド</li>
+      <li>マージパッチの適用</li>
+      <li>デフォルト値の適用</li>
+      <li>パス正規化</li>
+      <li>シェル環境からのAPIキーフォールバック</li>
+      <li>Zodスキーマによるバリデーション</li>
+    </ol>
+
+    <h3>主な設定パス</h3>
+    <table>
+      <tr><th>パス</th><th>内容</th></tr>
+      <tr><td><code>~/.openclaw/</code></td><td>状態ディレクトリ（セッション、認証情報等）</td></tr>
+      <tr><td><code>~/.openclaw/openclaw.json</code></td><td>主設定ファイル</td></tr>
+      <tr><td><code>~/.openclaw/sessions/</code></td><td>セッションデータ</td></tr>
+      <tr><td><code>~/.openclaw/credentials/</code></td><td>認証情報</td></tr>
+      <tr><td><code>~/.openclaw/workspace/</code></td><td>デフォルトワークスペース</td></tr>
+    </table>
+
+    <h2>依存性注入パターン</h2>
+    <p>
+      OpenClawは <code>createDefaultDeps()</code>（<span class="file-ref">src/cli/deps.ts</span>）
+      を中心とした依存性注入パターンを採用しています。
+    </p>
+    <ul>
+      <li><strong>遅延モジュール読み込み</strong> &mdash; コマンド、チャンネル、プラグインすべてが動的 <code>import()</code> を使い、起動時間を最小化</li>
+      <li><strong>ファクトリ + DI</strong> &mdash; <code>createDefaultDeps()</code>、<code>createProcessSupervisor()</code>、<code>createProgramContext()</code> パターン</li>
+      <li><strong>マルチプラットフォーム抽象化</strong> &mdash; <code>GatewayService</code> インターフェースでmacOS/Linux/Windowsを統一的に扱う</li>
+    </ul>
+
+    <h2>デーモン / サービスレイヤー</h2>
+    <p>
+      <span class="file-ref">src/daemon/service.ts</span> の <code>resolveGatewayService()</code> が
+      プラットフォーム固有のサービス管理を提供します：
+    </p>
+    <table>
+      <tr><th>OS</th><th>サービス方式</th><th>詳細</th></tr>
+      <tr><td>macOS</td><td>LaunchAgent (launchd plist)</td><td>ユーザーログイン時に自動起動</td></tr>
+      <tr><td>Linux</td><td>systemd unit</td><td>lingerサポートでSSH不要の常時起動</td></tr>
+      <tr><td>Windows</td><td>Scheduled Task (schtasks)</td><td>タスクスケジューラ経由</td></tr>
+    </table>
+
+    <h2>プロセス監視</h2>
+    <p>
+      <span class="file-ref">src/process/supervisor/supervisor.ts</span> の <code>createProcessSupervisor()</code> が
+      プロセスの生成・監視を管理します。2つのスポーンモードがあります：
+    </p>
+    <ul>
+      <li><strong>child</strong> &mdash; 標準の <code>child_process.spawn</code>（非対話的コマンド用）</li>
+      <li><strong>pty</strong> &mdash; <code>node-pty</code> による擬似端末（対話的シェルコマンド用）</li>
+    </ul>
+    <p>機能：スコープベースのキャンセル、全体タイムアウト、無出力タイムアウト、stdout/stderrキャプチャ、PID追跡、状態マシン（starting → running → exiting → finalized）。</p>
+
+    <h2>デフォルト設定</h2>
+    <p><span class="file-ref">src/agents/defaults.ts</span> で定義されるデフォルト値：</p>
+    <table>
+      <tr><th>項目</th><th>値</th></tr>
+      <tr><td>デフォルトプロバイダ</td><td><code>anthropic</code></td></tr>
+      <tr><td>デフォルトモデル</td><td><code>claude-opus-4-6</code></td></tr>
+      <tr><td>デフォルトコンテキストトークン数</td><td>200,000</td></tr>
+      <tr><td>Gatewayポート</td><td>18789</td></tr>
+    </table>
+
+    <div class="page-nav">
+      <a href="index.html">&larr; トップ</a>
+      <a href="02-system-prompt.html">システムプロンプトとアイデンティティ &rarr;</a>
+    </div>
+
+    <footer>
+      OpenClaw Architecture Analysis &mdash; 01. 全体概要とアーキテクチャ
+    </footer>
+  </div>
+</body>
+</html>
