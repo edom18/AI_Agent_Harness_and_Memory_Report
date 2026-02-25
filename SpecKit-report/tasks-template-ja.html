@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>タスク: [機能名]</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>タスク: [機能名]</h1>
+    </header>
+    <h1>タスク: [機能名]</h1>
+<p><strong>入力</strong>: <code>/specs/[###-feature-name]/</code> からの設計ドキュメント
+<strong>前提条件</strong>: plan.md（必須）、spec.md（ユーザーストーリーに必須）、research.md、data-model.md、contracts/</p>
+<p><strong>テスト</strong>: 以下の例にはテストタスクが含まれています。テストはオプションです - 機能仕様で明示的に要求された場合のみ含めてください。</p>
+<p><strong>構成</strong>: タスクはユーザーストーリーごとにグループ化され、各ストーリーの独立した実装とテストを可能にします。</p>
+<h2>フォーマット: <code>[ID] [P?] [Story] 説明</code></h2>
+<ul>
+<li><strong>[P]</strong>: 並列実行可能（異なるファイル、依存関係なし）</li>
+<li><strong>[Story]</strong>: このタスクが属するユーザーストーリー（例: US1、US2、US3）</li>
+<li>説明には正確なファイルパスを含める</li>
+</ul>
+<h2>パス規約</h2>
+<ul>
+<li><strong>単一プロジェクト</strong>: リポジトリルートに <code>src/</code>、<code>tests/</code></li>
+<li><strong>Web アプリ</strong>: <code>backend/src/</code>、<code>frontend/src/</code></li>
+<li><strong>モバイル</strong>: <code>api/src/</code>、<code>ios/src/</code> または <code>android/src/</code></li>
+<li>以下に示すパスは単一プロジェクトを想定 - plan.md の構造に基づいて調整</li>
+</ul>
+<!--
+  ============================================================================
+  重要: 以下のタスクは説明目的のサンプルタスクです。
+
+  /speckit.tasks コマンドは、これらを以下に基づく実際のタスクに置き換える必要があります:
+  - spec.md からのユーザーストーリー（優先度 P1、P2、P3...）
+  - plan.md からの機能要件
+  - data-model.md からのエンティティ
+  - contracts/ からのエンドポイント
+
+  タスクはユーザーストーリーごとに構成する必要があり、各ストーリーが次のようになる必要があります:
+  - 独立して実装可能
+  - 独立してテスト可能
+  - MVP インクリメントとして提供可能
+
+  生成された tasks.md ファイルにこれらのサンプルタスクを残さないでください。
+  ============================================================================
+-->
+
+<h2>フェーズ 1: セットアップ（共有インフラストラクチャ）</h2>
+<p><strong>目的</strong>: プロジェクトの初期化と基本構造</p>
+<ul>
+<li><input disabled="" type="checkbox"> T001 実装計画に従ってプロジェクト構造を作成</li>
+<li><input disabled="" type="checkbox"> T002 [フレームワーク]依存関係を持つ[言語]プロジェクトを初期化</li>
+<li><input disabled="" type="checkbox"> T003 [P] lint とフォーマットツールを設定</li>
+</ul>
+<hr>
+<h2>フェーズ 2: 基礎（必須の前提条件）</h2>
+<p><strong>目的</strong>: いかなるユーザーストーリーも実装できる前に完了する必要があるコアインフラストラクチャ</p>
+<p><strong>⚠️ 重要</strong>: このフェーズが完了するまで、ユーザーストーリーの作業は開始できません</p>
+<p>基礎タスクの例（プロジェクトに基づいて調整）:</p>
+<ul>
+<li><input disabled="" type="checkbox"> T004 データベーススキーマとマイグレーションフレームワークをセットアップ</li>
+<li><input disabled="" type="checkbox"> T005 [P] 認証/認可フレームワークを実装</li>
+<li><input disabled="" type="checkbox"> T006 [P] API ルーティングとミドルウェア構造をセットアップ</li>
+<li><input disabled="" type="checkbox"> T007 すべてのストーリーが依存するベースモデル/エンティティを作成</li>
+<li><input disabled="" type="checkbox"> T008 エラーハンドリングとログインフラストラクチャを設定</li>
+<li><input disabled="" type="checkbox"> T009 環境設定管理をセットアップ</li>
+</ul>
+<p><strong>チェックポイント</strong>: 基礎準備完了 - ユーザーストーリーの実装を並列で開始できます</p>
+<hr>
+<h2>フェーズ 3: ユーザーストーリー 1 - [タイトル] (優先度: P1) 🎯 MVP</h2>
+<p><strong>目標</strong>: [このストーリーが提供するものの簡潔な説明]</p>
+<p><strong>独立したテスト</strong>: [このストーリーを単独で検証する方法]</p>
+<h3>ユーザーストーリー 1 のテスト（オプション - テストが要求された場合のみ）⚠️</h3>
+<blockquote>
+<p><strong>注意: これらのテストを最初に書き、実装前に失敗することを確認してください</strong></p>
+</blockquote>
+<ul>
+<li><input disabled="" type="checkbox"> T010 [P] [US1] tests/contract/test_[name].py で [エンドポイント] の契約テスト</li>
+<li><input disabled="" type="checkbox"> T011 [P] [US1] tests/integration/test_[name].py で [ユーザージャーニー] の統合テスト</li>
+</ul>
+<h3>ユーザーストーリー 1 の実装</h3>
+<ul>
+<li><input disabled="" type="checkbox"> T012 [P] [US1] src/models/[entity1].py に [Entity1] モデルを作成</li>
+<li><input disabled="" type="checkbox"> T013 [P] [US1] src/models/[entity2].py に [Entity2] モデルを作成</li>
+<li><input disabled="" type="checkbox"> T014 [US1] src/services/[service].py に [Service] を実装（T012、T013 に依存）</li>
+<li><input disabled="" type="checkbox"> T015 [US1] src/[location]/[file].py に [endpoint/feature] を実装</li>
+<li><input disabled="" type="checkbox"> T016 [US1] バリデーションとエラーハンドリングを追加</li>
+<li><input disabled="" type="checkbox"> T017 [US1] ユーザーストーリー 1 の操作のログを追加</li>
+</ul>
+<p><strong>チェックポイント</strong>: この時点で、ユーザーストーリー 1 は完全に機能し、独立してテスト可能であるべきです</p>
+<hr>
+<h2>フェーズ 4: ユーザーストーリー 2 - [タイトル] (優先度: P2)</h2>
+<p><strong>目標</strong>: [このストーリーが提供するものの簡潔な説明]</p>
+<p><strong>独立したテスト</strong>: [このストーリーを単独で検証する方法]</p>
+<h3>ユーザーストーリー 2 のテスト（オプション - テストが要求された場合のみ）⚠️</h3>
+<ul>
+<li><input disabled="" type="checkbox"> T018 [P] [US2] tests/contract/test_[name].py で [エンドポイント] の契約テスト</li>
+<li><input disabled="" type="checkbox"> T019 [P] [US2] tests/integration/test_[name].py で [ユーザージャーニー] の統合テスト</li>
+</ul>
+<h3>ユーザーストーリー 2 の実装</h3>
+<ul>
+<li><input disabled="" type="checkbox"> T020 [P] [US2] src/models/[entity].py に [Entity] モデルを作成</li>
+<li><input disabled="" type="checkbox"> T021 [US2] src/services/[service].py に [Service] を実装</li>
+<li><input disabled="" type="checkbox"> T022 [US2] src/[location]/[file].py に [endpoint/feature] を実装</li>
+<li><input disabled="" type="checkbox"> T023 [US2] ユーザーストーリー 1 のコンポーネントと統合（必要な場合）</li>
+</ul>
+<p><strong>チェックポイント</strong>: この時点で、ユーザーストーリー 1 と 2 の両方が独立して機能するべきです</p>
+<hr>
+<h2>フェーズ 5: ユーザーストーリー 3 - [タイトル] (優先度: P3)</h2>
+<p><strong>目標</strong>: [このストーリーが提供するものの簡潔な説明]</p>
+<p><strong>独立したテスト</strong>: [このストーリーを単独で検証する方法]</p>
+<h3>ユーザーストーリー 3 のテスト（オプション - テストが要求された場合のみ）⚠️</h3>
+<ul>
+<li><input disabled="" type="checkbox"> T024 [P] [US3] tests/contract/test_[name].py で [エンドポイント] の契約テスト</li>
+<li><input disabled="" type="checkbox"> T025 [P] [US3] tests/integration/test_[name].py で [ユーザージャーニー] の統合テスト</li>
+</ul>
+<h3>ユーザーストーリー 3 の実装</h3>
+<ul>
+<li><input disabled="" type="checkbox"> T026 [P] [US3] src/models/[entity].py に [Entity] モデルを作成</li>
+<li><input disabled="" type="checkbox"> T027 [US3] src/services/[service].py に [Service] を実装</li>
+<li><input disabled="" type="checkbox"> T028 [US3] src/[location]/[file].py に [endpoint/feature] を実装</li>
+</ul>
+<p><strong>チェックポイント</strong>: すべてのユーザーストーリーが独立して機能するようになりました</p>
+<hr>
+<p>[必要に応じて、同じパターンでユーザーストーリーフェーズを追加]</p>
+<hr>
+<h2>フェーズ N: 仕上げと横断的関心事</h2>
+<p><strong>目的</strong>: 複数のユーザーストーリーに影響する改善</p>
+<ul>
+<li><input disabled="" type="checkbox"> TXXX [P] docs/ でドキュメント更新</li>
+<li><input disabled="" type="checkbox"> TXXX コードのクリーンアップとリファクタリング</li>
+<li><input disabled="" type="checkbox"> TXXX すべてのストーリーにわたるパフォーマンス最適化</li>
+<li><input disabled="" type="checkbox"> TXXX [P] 追加の単体テスト（要求された場合）tests/unit/ で</li>
+<li><input disabled="" type="checkbox"> TXXX セキュリティ強化</li>
+<li><input disabled="" type="checkbox"> TXXX quickstart.md の検証を実行</li>
+</ul>
+<hr>
+<h2>依存関係と実行順序</h2>
+<h3>フェーズの依存関係</h3>
+<ul>
+<li><strong>セットアップ（フェーズ 1）</strong>: 依存関係なし - すぐに開始できます</li>
+<li><strong>基礎（フェーズ 2）</strong>: セットアップ完了に依存 - すべてのユーザーストーリーをブロックします</li>
+<li><strong>ユーザーストーリー（フェーズ 3+）</strong>: すべて基礎フェーズ完了に依存<ul>
+<li>その後、ユーザーストーリーは並列で進行可能（人員がいる場合）</li>
+<li>または優先度順に順次進行（P1 → P2 → P3）</li>
+</ul>
+</li>
+<li><strong>仕上げ（最終フェーズ）</strong>: 希望するすべてのユーザーストーリーが完了していることに依存</li>
+</ul>
+<h3>ユーザーストーリーの依存関係</h3>
+<ul>
+<li><strong>ユーザーストーリー 1（P1）</strong>: 基礎（フェーズ 2）後に開始可能 - 他のストーリーへの依存関係なし</li>
+<li><strong>ユーザーストーリー 2（P2）</strong>: 基礎（フェーズ 2）後に開始可能 - US1 と統合する可能性があるが、独立してテスト可能であるべき</li>
+<li><strong>ユーザーストーリー 3（P3）</strong>: 基礎（フェーズ 2）後に開始可能 - US1/US2 と統合する可能性があるが、独立してテスト可能であるべき</li>
+</ul>
+<h3>各ユーザーストーリー内</h3>
+<ul>
+<li>テスト（含まれる場合）は実装前に書き、失敗することを確認する必要があります</li>
+<li>サービスの前にモデル</li>
+<li>エンドポイントの前にサービス</li>
+<li>統合の前にコア実装</li>
+<li>次の優先度に移る前にストーリー完了</li>
+</ul>
+<h3>並列実行の機会</h3>
+<ul>
+<li>[P] でマークされたすべてのセットアップタスクは並列実行可能</li>
+<li>フェーズ 2 内のすべての基礎タスク [P] は並列実行可能</li>
+<li>基礎フェーズが完了すると、すべてのユーザーストーリーが並列で開始可能（チーム容量が許す場合）</li>
+<li>ユーザーストーリーのすべてのテスト [P] は並列実行可能</li>
+<li>ストーリー内のモデル [P] は並列実行可能</li>
+<li>異なるユーザーストーリーは異なるチームメンバーによって並列作業可能</li>
+</ul>
+<hr>
+<h2>並列実行の例: ユーザーストーリー 1</h2>
+<pre><code class="language-bash"># ユーザーストーリー 1 のすべてのテストを一緒に起動（テストが要求された場合）:
+Task: &quot;tests/contract/test_[name].py で [エンドポイント] の契約テスト&quot;
+Task: &quot;tests/integration/test_[name].py で [ユーザージャーニー] の統合テスト&quot;
+
+# ユーザーストーリー 1 のすべてのモデルを一緒に起動:
+Task: &quot;src/models/[entity1].py に [Entity1] モデルを作成&quot;
+Task: &quot;src/models/[entity2].py に [Entity2] モデルを作成&quot;
+</code></pre>
+<hr>
+<h2>実装戦略</h2>
+<h3>MVP ファースト（ユーザーストーリー 1 のみ）</h3>
+<ol>
+<li>フェーズ 1 完了: セットアップ</li>
+<li>フェーズ 2 完了: 基礎（重要 - すべてのストーリーをブロック）</li>
+<li>フェーズ 3 完了: ユーザーストーリー 1</li>
+<li><strong>停止して検証</strong>: ユーザーストーリー 1 を独立してテスト</li>
+<li>準備ができたらデプロイ/デモ</li>
+</ol>
+<h3>段階的デリバリー</h3>
+<ol>
+<li>セットアップ + 基礎完了 → 基礎準備完了</li>
+<li>ユーザーストーリー 1 追加 → 独立してテスト → デプロイ/デモ（MVP!）</li>
+<li>ユーザーストーリー 2 追加 → 独立してテスト → デプロイ/デモ</li>
+<li>ユーザーストーリー 3 追加 → 独立してテスト → デプロイ/デモ</li>
+<li>各ストーリーは以前のストーリーを壊すことなく価値を追加</li>
+</ol>
+<h3>並列チーム戦略</h3>
+<p>複数の開発者がいる場合:</p>
+<ol>
+<li>チームで一緒にセットアップ + 基礎を完了</li>
+<li>基礎が完了したら:<ul>
+<li>開発者 A: ユーザーストーリー 1</li>
+<li>開発者 B: ユーザーストーリー 2</li>
+<li>開発者 C: ユーザーストーリー 3</li>
+</ul>
+</li>
+<li>ストーリーは独立して完了し、統合</li>
+</ol>
+<hr>
+<h2>注意事項</h2>
+<ul>
+<li>[P] タスク = 異なるファイル、依存関係なし</li>
+<li>[Story] ラベルはタスクを特定のユーザーストーリーにマッピングしてトレーサビリティを確保</li>
+<li>各ユーザーストーリーは独立して完了およびテスト可能であるべき</li>
+<li>実装前にテストが失敗することを確認</li>
+<li>各タスクまたは論理グループの後にコミット</li>
+<li>任意のチェックポイントで停止してストーリーを独立して検証</li>
+<li>避けるべき: 曖昧なタスク、同じファイルの競合、独立性を壊すストーリー間の依存関係</li>
+</ul>
+
+  </div>
+</body>
+</html>

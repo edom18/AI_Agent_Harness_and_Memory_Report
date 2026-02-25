@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SpecKit スクリプトガイド</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>SpecKit スクリプトガイド</h1>
+    </header>
+    <h1>SpecKit スクリプトガイド</h1>
+<p><strong>作成日</strong>: 2026-02-14
+<strong>対象</strong>: <code>.specify/scripts/bash/</code> ディレクトリ内のスクリプト</p>
+<hr>
+<h2>目次</h2>
+<ol>
+<li><a href="#%E3%82%B9%E3%82%AF%E3%83%AA%E3%83%97%E3%83%88%E3%81%AE%E6%A6%82%E8%A6%81">スクリプトの概要</a></li>
+<li><a href="#commonsh---%E5%85%B1%E9%80%9A%E9%96%A2%E6%95%B0%E3%83%A9%E3%82%A4%E3%83%96%E3%83%A9%E3%83%AA">common.sh - 共通関数ライブラリ</a></li>
+<li><a href="#create-new-featuresh---%E6%96%B0%E8%A6%8F%E6%A9%9F%E8%83%BD%E4%BD%9C%E6%88%90">create-new-feature.sh - 新規機能作成</a></li>
+<li><a href="#setup-plansh---%E8%A8%88%E7%94%BB%E3%82%BB%E3%83%83%E3%83%88%E3%82%A2%E3%83%83%E3%83%97">setup-plan.sh - 計画セットアップ</a></li>
+<li><a href="#check-prerequisitessh---%E5%89%8D%E6%8F%90%E6%9D%A1%E4%BB%B6%E3%83%81%E3%82%A7%E3%83%83%E3%82%AF">check-prerequisites.sh - 前提条件チェック</a></li>
+<li><a href="#update-agent-contextsh---ai-%E3%82%A8%E3%83%BC%E3%82%B8%E3%82%A7%E3%83%B3%E3%83%88%E3%82%B3%E3%83%B3%E3%83%86%E3%82%AD%E3%82%B9%E3%83%88%E6%9B%B4%E6%96%B0">update-agent-context.sh - AI エージェントコンテキスト更新</a></li>
+<li><a href="#%E4%BD%BF%E7%94%A8%E4%BE%8B">使用例</a></li>
+</ol>
+<hr>
+<h2>スクリプトの概要</h2>
+<p><code>.specify/scripts/bash/</code> ディレクトリには、SpecKit ワークフローを自動化する Bash スクリプトが含まれています。これらのスクリプトは、機能の作成、ドキュメントの準備、AI エージェントへのコンテキスト提供などを効率化します。</p>
+<h3>スクリプト一覧</h3>
+<table>
+<thead>
+<tr>
+<th>スクリプト名</th>
+<th>目的</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>common.sh</code></td>
+<td>共通関数とユーティリティの提供</td>
+</tr>
+<tr>
+<td><code>create-new-feature.sh</code></td>
+<td>新規機能ブランチとディレクトリの作成</td>
+</tr>
+<tr>
+<td><code>setup-plan.sh</code></td>
+<td>実装計画ファイルのセットアップ</td>
+</tr>
+<tr>
+<td><code>check-prerequisites.sh</code></td>
+<td>必要なファイルと前提条件の確認</td>
+</tr>
+<tr>
+<td><code>update-agent-context.sh</code></td>
+<td>AI エージェント向けコンテキストファイルの更新</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>common.sh - 共通関数ライブラリ</h2>
+<h3>概要</h3>
+<p>他のすべてのスクリプトから利用される共通関数を提供するライブラリです。Git/非Git 環境の両方に対応し、柔軟なパス解決を実現します。</p>
+<h3>主要関数</h3>
+<h4>1. <code>get_repo_root()</code></h4>
+<ul>
+<li><strong>目的</strong>: リポジトリのルートディレクトリを取得</li>
+<li><strong>動作</strong>:<ul>
+<li>Git リポジトリの場合: <code>git rev-parse --show-toplevel</code> を使用</li>
+<li>非 Git の場合: スクリプトの場所から相対的に推測</li>
+</ul>
+</li>
+<li><strong>戻り値</strong>: リポジトリのルートパス</li>
+</ul>
+<h4>2. <code>get_current_branch()</code></h4>
+<ul>
+<li><strong>目的</strong>: 現在の機能ブランチ/機能名を取得</li>
+<li><strong>優先順位</strong>:<ol>
+<li>環境変数 <code>SPECIFY_FEATURE</code></li>
+<li>Git ブランチ名（Git 利用時）</li>
+<li><code>specs/</code> ディレクトリ内の最新機能（番号順）</li>
+<li>デフォルト: <code>&quot;main&quot;</code></li>
+</ol>
+</li>
+<li><strong>戻り値</strong>: ブランチ名または機能名</li>
+</ul>
+<h4>3. <code>has_git()</code></h4>
+<ul>
+<li><strong>目的</strong>: Git が利用可能かどうかを判定</li>
+<li><strong>戻り値</strong>: 成功（0）または失敗（1）</li>
+</ul>
+<h4>4. <code>check_feature_branch(branch, has_git_repo)</code></h4>
+<ul>
+<li><strong>目的</strong>: ブランチ名が機能ブランチの命名規則に従っているか検証</li>
+<li><strong>命名規則</strong>: <code>###-feature-name</code>（例: <code>001-user-auth</code>）</li>
+<li><strong>非 Git の場合</strong>: 警告を表示するが検証をスキップ</li>
+</ul>
+<h4>5. <code>find_feature_dir_by_prefix(repo_root, branch_name)</code></h4>
+<ul>
+<li><strong>目的</strong>: ブランチの数値プレフィックスに基づいて機能ディレクトリを検索</li>
+<li><strong>特徴</strong>:<ul>
+<li>複数のブランチが同じ仕様で作業可能（例: <code>004-fix-bug</code> と <code>004-add-feature</code>）</li>
+<li><code>specs/</code> 内で数値プレフィックスが一致するディレクトリを検索</li>
+</ul>
+</li>
+<li><strong>戻り値</strong>: 機能ディレクトリのパス</li>
+</ul>
+<h4>6. <code>get_feature_paths()</code></h4>
+<ul>
+<li><strong>目的</strong>: 現在の機能に関連するすべてのパスを生成</li>
+<li><strong>出力</strong>:<pre><code class="language-bash">REPO_ROOT=&#39;/path/to/repo&#39;
+CURRENT_BRANCH=&#39;001-feature-name&#39;
+HAS_GIT=&#39;true&#39;
+FEATURE_DIR=&#39;/path/to/repo/specs/001-feature-name&#39;
+FEATURE_SPEC=&#39;/path/to/repo/specs/001-feature-name/spec.md&#39;
+IMPL_PLAN=&#39;/path/to/repo/specs/001-feature-name/plan.md&#39;
+TASKS=&#39;/path/to/repo/specs/001-feature-name/tasks.md&#39;
+RESEARCH=&#39;/path/to/repo/specs/001-feature-name/research.md&#39;
+DATA_MODEL=&#39;/path/to/repo/specs/001-feature-name/data-model.md&#39;
+QUICKSTART=&#39;/path/to/repo/specs/001-feature-name/quickstart.md&#39;
+CONTRACTS_DIR=&#39;/path/to/repo/specs/001-feature-name/contracts&#39;
+</code></pre>
+</li>
+</ul>
+<h4>7. ユーティリティ関数</h4>
+<ul>
+<li><code>check_file(path, label)</code>: ファイルの存在確認と表示</li>
+<li><code>check_dir(path, label)</code>: ディレクトリの存在確認と表示（内容あり）</li>
+</ul>
+<h3>使用方法</h3>
+<pre><code class="language-bash"># 他のスクリプトから読み込む
+source &quot;$SCRIPT_DIR/common.sh&quot;
+
+# パスを取得して環境変数に設定
+eval $(get_feature_paths)
+
+# ブランチをチェック
+check_feature_branch &quot;$CURRENT_BRANCH&quot; &quot;$HAS_GIT&quot; || exit 1
+</code></pre>
+<hr>
+<h2>create-new-feature.sh - 新規機能作成</h2>
+<h3>概要</h3>
+<p>新しい機能の開発を開始するための初期セットアップを自動化します。ブランチ作成、ディレクトリ作成、仕様ファイルの初期化を行います。</p>
+<h3>機能</h3>
+<ol>
+<li><p><strong>機能番号の自動採番</strong></p>
+<ul>
+<li>既存の <code>specs/</code> ディレクトリとブランチを調査</li>
+<li>最大番号を見つけて +1 してユニークな番号を生成</li>
+<li>形式: <code>001</code>、<code>002</code>、<code>003</code>...（3桁ゼロパディング）</li>
+</ul>
+</li>
+<li><p><strong>ブランチ名の生成</strong></p>
+<ul>
+<li><strong>自動生成モード</strong>: 機能説明から意味のある単語を抽出<ul>
+<li>ストップワード（&quot;the&quot;、&quot;a&quot;、&quot;is&quot; など）をフィルタリング</li>
+<li>3-4 語を選択してハイフンで結合</li>
+</ul>
+</li>
+<li><strong>手動指定モード</strong>: <code>--short-name</code> オプションで指定</li>
+<li>最終形式: <code>###-meaningful-name</code></li>
+</ul>
+</li>
+<li><p><strong>Git ブランチ作成</strong></p>
+<ul>
+<li>Git 環境: <code>git checkout -b ###-feature-name</code></li>
+<li>非 Git 環境: 警告を表示してスキップ</li>
+</ul>
+</li>
+<li><p><strong>ディレクトリとファイルの初期化</strong></p>
+<ul>
+<li><code>specs/###-feature-name/</code> ディレクトリを作成</li>
+<li><code>spec-template.md</code> をコピーして <code>spec.md</code> を作成</li>
+</ul>
+</li>
+<li><p><strong>環境変数の設定</strong></p>
+<ul>
+<li><code>SPECIFY_FEATURE</code> 環境変数を設定（現在のセッション用）</li>
+</ul>
+</li>
+</ol>
+<h3>オプション</h3>
+<table>
+<thead>
+<tr>
+<th>オプション</th>
+<th>説明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>--json</code></td>
+<td>JSON 形式で結果を出力</td>
+</tr>
+<tr>
+<td><code>--short-name &lt;name&gt;</code></td>
+<td>カスタム短縮名を指定（2-4語）</td>
+</tr>
+<tr>
+<td><code>--number N</code></td>
+<td>ブランチ番号を手動指定（自動検出を上書き）</td>
+</tr>
+<tr>
+<td><code>--help</code>, <code>-h</code></td>
+<td>ヘルプメッセージを表示</td>
+</tr>
+</tbody></table>
+<h3>使用例</h3>
+<pre><code class="language-bash"># 自動でブランチ名を生成
+./create-new-feature.sh &quot;Add user authentication system&quot;
+# 結果: 001-user-authentication-system
+
+# カスタム短縮名を使用
+./create-new-feature.sh &quot;Implement OAuth2 integration for API&quot; --short-name &quot;oauth-api&quot;
+# 結果: 002-oauth-api
+
+# 番号を手動指定
+./create-new-feature.sh &quot;Add logging&quot; --number 5
+# 結果: 005-add-logging
+
+# JSON 出力
+./create-new-feature.sh &quot;New feature&quot; --json
+# {&quot;BRANCH_NAME&quot;:&quot;003-new-feature&quot;,&quot;SPEC_FILE&quot;:&quot;/path/to/specs/003-new-feature/spec.md&quot;,&quot;FEATURE_NUM&quot;:&quot;003&quot;}
+</code></pre>
+<h3>内部動作</h3>
+<ol>
+<li><p><strong>番号決定のロジック</strong>:</p>
+<pre><code class="language-bash"># Git ブランチから最大番号を取得
+get_highest_from_branches()
+
+# specs/ ディレクトリから最大番号を取得
+get_highest_from_specs()
+
+# 両方の最大値 + 1
+BRANCH_NUMBER = max(branches, specs) + 1
+</code></pre>
+</li>
+<li><p><strong>ブランチ名のクリーニング</strong>:</p>
+<pre><code class="language-bash"># 大文字を小文字に変換
+# 非英数字をハイフンに変換
+# 連続するハイフンを1つに
+# 先頭/末尾のハイフンを削除
+</code></pre>
+</li>
+<li><p><strong>GitHub の制限対応</strong>:</p>
+<ul>
+<li>ブランチ名は 244 バイト以内に制限</li>
+<li>超過した場合は自動的に切り詰め</li>
+</ul>
+</li>
+</ol>
+<hr>
+<h2>setup-plan.sh - 計画セットアップ</h2>
+<h3>概要</h3>
+<p>実装計画フェーズの準備として、<code>plan.md</code> ファイルを作成します。</p>
+<h3>機能</h3>
+<ol>
+<li><p><strong>環境確認</strong></p>
+<ul>
+<li><code>common.sh</code> から機能パスを取得</li>
+<li>機能ブランチの妥当性をチェック</li>
+</ul>
+</li>
+<li><p><strong>ディレクトリ作成</strong></p>
+<ul>
+<li><code>FEATURE_DIR</code> が存在しない場合は作成</li>
+</ul>
+</li>
+<li><p><strong>計画ファイルの初期化</strong></p>
+<ul>
+<li>テンプレート (<code>plan-template.md</code>) をコピーして <code>plan.md</code> を作成</li>
+<li>テンプレートがない場合は空ファイルを作成</li>
+</ul>
+</li>
+</ol>
+<h3>オプション</h3>
+<table>
+<thead>
+<tr>
+<th>オプション</th>
+<th>説明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>--json</code></td>
+<td>JSON 形式で結果を出力</td>
+</tr>
+<tr>
+<td><code>--help</code>, <code>-h</code></td>
+<td>ヘルプメッセージを表示</td>
+</tr>
+</tbody></table>
+<h3>使用例</h3>
+<pre><code class="language-bash"># 通常の使用
+./setup-plan.sh
+
+# JSON 出力
+./setup-plan.sh --json
+</code></pre>
+<h3>出力例</h3>
+<p><strong>テキスト形式</strong>:</p>
+<pre><code>Copied plan template to /path/to/specs/001-feature/plan.md
+FEATURE_SPEC: /path/to/specs/001-feature/spec.md
+IMPL_PLAN: /path/to/specs/001-feature/plan.md
+SPECS_DIR: /path/to/specs/001-feature
+BRANCH: 001-feature
+HAS_GIT: true
+</code></pre>
+<p><strong>JSON 形式</strong>:</p>
+<pre><code class="language-json">{
+  &quot;FEATURE_SPEC&quot;: &quot;/path/to/specs/001-feature/spec.md&quot;,
+  &quot;IMPL_PLAN&quot;: &quot;/path/to/specs/001-feature/plan.md&quot;,
+  &quot;SPECS_DIR&quot;: &quot;/path/to/specs/001-feature&quot;,
+  &quot;BRANCH&quot;: &quot;001-feature&quot;,
+  &quot;HAS_GIT&quot;: &quot;true&quot;
+}
+</code></pre>
+<hr>
+<h2>check-prerequisites.sh - 前提条件チェック</h2>
+<h3>概要</h3>
+<p>実装の各フェーズで必要なファイルと前提条件が満たされているかを検証します。</p>
+<h3>機能</h3>
+<ol>
+<li><p><strong>必須ファイルの確認</strong></p>
+<ul>
+<li>機能ディレクトリの存在</li>
+<li><code>plan.md</code> の存在（常に必須）</li>
+<li><code>tasks.md</code> の存在（<code>--require-tasks</code> 指定時）</li>
+</ul>
+</li>
+<li><p><strong>オプションファイルの検出</strong></p>
+<ul>
+<li><code>research.md</code></li>
+<li><code>data-model.md</code></li>
+<li><code>contracts/</code> ディレクトリ（内容あり）</li>
+<li><code>quickstart.md</code></li>
+<li><code>tasks.md</code>（<code>--include-tasks</code> 指定時）</li>
+</ul>
+</li>
+<li><p><strong>複数の出力モード</strong></p>
+<ul>
+<li>テキスト形式: ファイルの存在を ✓/✗ で表示</li>
+<li>JSON 形式: プログラムで解析可能な構造化データ</li>
+<li>パスのみ: 検証なしでパス変数のみ出力</li>
+</ul>
+</li>
+</ol>
+<h3>オプション</h3>
+<table>
+<thead>
+<tr>
+<th>オプション</th>
+<th>説明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>--json</code></td>
+<td>JSON 形式で出力</td>
+</tr>
+<tr>
+<td><code>--require-tasks</code></td>
+<td><code>tasks.md</code> の存在を必須とする</td>
+</tr>
+<tr>
+<td><code>--include-tasks</code></td>
+<td>利用可能ドキュメントリストに <code>tasks.md</code> を含める</td>
+</tr>
+<tr>
+<td><code>--paths-only</code></td>
+<td>パス変数のみ出力（検証なし）</td>
+</tr>
+<tr>
+<td><code>--help</code>, <code>-h</code></td>
+<td>ヘルプメッセージを表示</td>
+</tr>
+</tbody></table>
+<h3>使用例</h3>
+<pre><code class="language-bash"># タスク生成の前提条件をチェック（plan.md 必須）
+./check-prerequisites.sh --json
+
+# 実装の前提条件をチェック（plan.md + tasks.md 必須）
+./check-prerequisites.sh --json --require-tasks --include-tasks
+
+# パスのみ取得（検証なし）
+./check-prerequisites.sh --paths-only
+</code></pre>
+<h3>出力例</h3>
+<p><strong>テキスト形式</strong>:</p>
+<pre><code>FEATURE_DIR:/path/to/specs/001-feature
+AVAILABLE_DOCS:
+  ✓ research.md
+  ✓ data-model.md
+  ✗ contracts/
+  ✓ quickstart.md
+</code></pre>
+<p><strong>JSON 形式</strong>:</p>
+<pre><code class="language-json">{
+  &quot;FEATURE_DIR&quot;: &quot;/path/to/specs/001-feature&quot;,
+  &quot;AVAILABLE_DOCS&quot;: [&quot;research.md&quot;, &quot;data-model.md&quot;, &quot;quickstart.md&quot;]
+}
+</code></pre>
+<p><strong>パスのみモード</strong>:</p>
+<pre><code>REPO_ROOT: /path/to/repo
+BRANCH: 001-feature
+FEATURE_DIR: /path/to/specs/001-feature
+FEATURE_SPEC: /path/to/specs/001-feature/spec.md
+IMPL_PLAN: /path/to/specs/001-feature/plan.md
+TASKS: /path/to/specs/001-feature/tasks.md
+</code></pre>
+<h3>エラーハンドリング</h3>
+<ul>
+<li>機能ディレクトリが見つからない → <code>/speckit.specify</code> を先に実行するよう促す</li>
+<li><code>plan.md</code> が見つからない → <code>/speckit.plan</code> を先に実行するよう促す</li>
+<li><code>tasks.md</code> が必須だが見つからない → <code>/speckit.tasks</code> を先に実行するよう促す</li>
+</ul>
+<hr>
+<h2>update-agent-context.sh - AI エージェントコンテキスト更新</h2>
+<h3>概要</h3>
+<p><code>plan.md</code> から技術情報を抽出し、AI エージェント向けのコンテキストファイル（<code>CLAUDE.md</code>、<code>GEMINI.md</code> など）を更新します。</p>
+<h3>機能</h3>
+<ol>
+<li><p><strong>環境検証</strong></p>
+<ul>
+<li>現在の機能ブランチの確認</li>
+<li><code>plan.md</code> の存在確認</li>
+<li>テンプレートファイルの確認</li>
+</ul>
+</li>
+<li><p><strong>plan.md からのデータ抽出</strong></p>
+<ul>
+<li><strong>Language/Version</strong>: <code>**Language/Version**: Python 3.11</code> などを抽出</li>
+<li><strong>Primary Dependencies</strong>: <code>**Primary Dependencies**: FastAPI</code> などを抽出</li>
+<li><strong>Storage</strong>: <code>**Storage**: SQLite</code> などを抽出</li>
+<li><strong>Project Type</strong>: <code>**Project Type**: single</code> などを抽出</li>
+</ul>
+</li>
+<li><p><strong>エージェントファイルの作成または更新</strong></p>
+<ul>
+<li><strong>新規作成</strong>: テンプレートからファイルを生成</li>
+<li><strong>既存更新</strong>: Active Technologies と Recent Changes セクションを更新</li>
+</ul>
+</li>
+<li><p><strong>複数の AI エージェント対応</strong></p>
+<ul>
+<li>Claude Code (<code>CLAUDE.md</code>)</li>
+<li>Gemini CLI (<code>GEMINI.md</code>)</li>
+<li>GitHub Copilot (<code>.github/agents/copilot-instructions.md</code>)</li>
+<li>Cursor IDE (<code>.cursor/rules/specify-rules.mdc</code>)</li>
+<li>Qwen Code (<code>QWEN.md</code>)</li>
+<li>その他多数（Windsurf、Kilo Code、Auggie、Roo、SHAI、Amazon Q など）</li>
+</ul>
+</li>
+</ol>
+<h3>オプション</h3>
+<table>
+<thead>
+<tr>
+<th>引数</th>
+<th>説明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>[agent_type]</code></td>
+<td>更新する特定のエージェント（省略時は全エージェント）</td>
+</tr>
+</tbody></table>
+<p><strong>対応エージェント</strong>: <code>claude</code>, <code>gemini</code>, <code>copilot</code>, <code>cursor-agent</code>, <code>qwen</code>, <code>opencode</code>, <code>codex</code>, <code>windsurf</code>, <code>kilocode</code>, <code>auggie</code>, <code>roo</code>, <code>codebuddy</code>, <code>qoder</code>, <code>amp</code>, <code>shai</code>, <code>q</code>, <code>bob</code></p>
+<h3>使用例</h3>
+<pre><code class="language-bash"># すべての既存エージェントファイルを更新
+./update-agent-context.sh
+
+# Claude のみを更新
+./update-agent-context.sh claude
+
+# Gemini のみを更新
+./update-agent-context.sh gemini
+</code></pre>
+<h3>内部動作</h3>
+<h4>1. データ抽出</h4>
+<pre><code class="language-bash">extract_plan_field() {
+    local field_pattern=&quot;$1&quot;
+    local plan_file=&quot;$2&quot;
+
+    # &quot;**Field**: value&quot; 形式の行を検索
+    grep &quot;^\*\*${field_pattern}\*\*: &quot; &quot;$plan_file&quot; | \
+        sed &quot;s|^\*\*${field_pattern}\*\*: ||&quot; | \
+        # &quot;NEEDS CLARIFICATION&quot; と &quot;N/A&quot; を除外
+        grep -v &quot;NEEDS CLARIFICATION&quot; | \
+        grep -v &quot;^N/A$&quot;
+}
+</code></pre>
+<h4>2. 新規ファイル作成</h4>
+<p>テンプレートのプレースホルダーを実際の値に置換:</p>
+<ul>
+<li><code>[PROJECT NAME]</code> → リポジトリ名</li>
+<li><code>[DATE]</code> → 現在の日付</li>
+<li><code>[EXTRACTED FROM ALL PLAN.MD FILES]</code> → 技術スタック</li>
+<li><code>[ACTUAL STRUCTURE FROM PLANS]</code> → プロジェクト構造</li>
+<li><code>[ONLY COMMANDS FOR ACTIVE TECHNOLOGIES]</code> → コマンド</li>
+<li><code>[LANGUAGE-SPECIFIC...]</code> → 言語規約</li>
+<li><code>[LAST 3 FEATURES...]</code> → 最近の変更</li>
+</ul>
+<h4>3. 既存ファイル更新</h4>
+<pre><code>## Active Technologies
+- Python 3.11 + FastAPI (001-user-auth)  ← 新規追加
+- SQLite (001-user-auth)                 ← 新規追加
+
+## Recent Changes
+- 001-user-auth: Added Python 3.11 + FastAPI  ← 新規追加（最上部）
+- 002-old-feature: Added...                   ← 既存（保持）
+- 003-older-feature: Added...                 ← 既存（保持）
+- 004-ancient-feature: Added...               ← 削除（最新3つのみ保持）
+</code></pre>
+<h3>コマンド生成例</h3>
+<p>言語に応じたビルド/テストコマンドを自動生成:</p>
+<ul>
+<li><strong>Python</strong>: <code>cd src &amp;&amp; pytest &amp;&amp; ruff check .</code></li>
+<li><strong>Rust</strong>: <code>cargo test &amp;&amp; cargo clippy</code></li>
+<li><strong>JavaScript/TypeScript</strong>: <code>npm test &amp;&amp; npm run lint</code></li>
+</ul>
+<h3>ログ出力</h3>
+<pre><code>INFO: Parsing plan data from /path/to/specs/001-feature/plan.md
+INFO: Found language: Python 3.11
+INFO: Found framework: FastAPI
+INFO: Found database: SQLite
+INFO: Updating Claude Code context file: /path/to/repo/CLAUDE.md
+✓ Updated existing Claude Code context file
+
+Summary of changes:
+  - Added language: Python 3.11
+  - Added framework: FastAPI
+  - Added database: SQLite
+</code></pre>
+<hr>
+<h2>使用例</h2>
+<h3>ワークフロー全体の例</h3>
+<pre><code class="language-bash"># 1. 新規機能を作成
+./create-new-feature.sh &quot;Add user authentication&quot;
+# → ブランチ: 001-user-authentication
+# → ディレクトリ: specs/001-user-authentication/
+# → ファイル: specs/001-user-authentication/spec.md
+
+# 2. 仕様を編集（手動または /speckit.specify コマンド）
+# spec.md にユーザーストーリー、要件、成功基準を記述
+
+# 3. 計画をセットアップ
+./setup-plan.sh
+# → ファイル: specs/001-user-authentication/plan.md
+
+# 4. 計画を編集（手動または /speckit.plan コマンド）
+# plan.md に技術スタック、プロジェクト構造を記述
+
+# 5. AI エージェントコンテキストを更新
+./update-agent-context.sh
+# → CLAUDE.md などが更新される
+
+# 6. タスク生成前の前提条件チェック
+./check-prerequisites.sh --json
+# → plan.md が存在することを確認
+
+# 7. タスクを生成（/speckit.tasks コマンド）
+# → ファイル: specs/001-user-authentication/tasks.md
+
+# 8. 実装前の前提条件チェック
+./check-prerequisites.sh --json --require-tasks --include-tasks
+# → plan.md と tasks.md が存在することを確認
+
+# 9. 実装を開始（/speckit.implement コマンドまたは手動）
+</code></pre>
+<h3>Git/非Git 環境の違い</h3>
+<h4>Git 環境</h4>
+<pre><code class="language-bash"># ブランチが自動作成される
+./create-new-feature.sh &quot;New feature&quot;
+# → git checkout -b 001-new-feature
+
+# ブランチから機能を自動検出
+./update-agent-context.sh
+# → 現在のブランチ名を使用
+</code></pre>
+<h4>非Git 環境</h4>
+<pre><code class="language-bash"># ブランチ作成はスキップされる（警告表示）
+./create-new-feature.sh &quot;New feature&quot;
+# Warning: Git repository not detected; skipped branch creation
+
+# 環境変数で機能を指定
+export SPECIFY_FEATURE=&quot;001-new-feature&quot;
+./update-agent-context.sh
+# → SPECIFY_FEATURE を使用
+</code></pre>
+<hr>
+<h2>まとめ</h2>
+<p>SpecKit のスクリプトは、仕様駆動開発ワークフローを効率化する強力なツールセットです。</p>
+<h3>各スクリプトの役割</h3>
+<ol>
+<li><strong>common.sh</strong>: すべてのスクリプトの基盤となる共通関数</li>
+<li><strong>create-new-feature.sh</strong>: 新規機能開発の起点</li>
+<li><strong>setup-plan.sh</strong>: 計画フェーズの準備</li>
+<li><strong>check-prerequisites.sh</strong>: 各フェーズの前提条件確認</li>
+<li><strong>update-agent-context.sh</strong>: AI エージェントとの連携</li>
+</ol>
+<h3>スクリプトの特徴</h3>
+<ul>
+<li><strong>柔軟性</strong>: Git/非Git 環境の両方に対応</li>
+<li><strong>自動化</strong>: 手作業を最小限に抑える</li>
+<li><strong>検証</strong>: エラーを早期に検出</li>
+<li><strong>統合</strong>: AI エージェントとシームレスに連携</li>
+</ul>
+<p>これらのスクリプトを活用することで、一貫性のある高品質なソフトウェア開発が可能になります。</p>
+
+  </div>
+</body>
+</html>

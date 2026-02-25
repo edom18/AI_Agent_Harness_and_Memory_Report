@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>実装計画: [機能名]</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>実装計画: [機能名]</h1>
+    </header>
+    <h1>実装計画: [機能名]</h1>
+<p><strong>ブランチ</strong>: <code>[###-feature-name]</code> | <strong>日付</strong>: [日付] | <strong>仕様</strong>: [リンク]
+<strong>入力</strong>: <code>/specs/[###-feature-name]/spec.md</code> からの機能仕様</p>
+<p><strong>注意</strong>: このテンプレートは <code>/speckit.plan</code> コマンドによって記入されます。実行ワークフローについては <code>.specify/templates/commands/plan.md</code> を参照してください。</p>
+<h2>概要</h2>
+<p>[機能仕様から抽出: 主要な要件 + リサーチからの技術アプローチ]</p>
+<h2>技術的コンテキスト</h2>
+<!--
+  アクション必須: このセクションの内容をプロジェクトの技術的詳細に置き換えてください。
+  ここに示されている構造は、反復プロセスをガイドするためのアドバイザリー的な性質で提示されています。
+-->
+
+<p><strong>言語/バージョン</strong>: [例: Python 3.11、Swift 5.9、Rust 1.75 または 明確化が必要]
+<strong>主な依存関係</strong>: [例: FastAPI、UIKit、LLVM または 明確化が必要]
+<strong>ストレージ</strong>: [該当する場合、例: PostgreSQL、CoreData、ファイル または N/A]
+<strong>テスト</strong>: [例: pytest、XCTest、cargo test または 明確化が必要]
+<strong>ターゲットプラットフォーム</strong>: [例: Linux サーバー、iOS 15+、WASM または 明確化が必要]
+<strong>プロジェクトタイプ</strong>: [single/web/mobile - ソース構造を決定]
+<strong>パフォーマンス目標</strong>: [ドメイン固有、例: 1000 req/s、10k 行/秒、60 fps または 明確化が必要]
+<strong>制約</strong>: [ドメイン固有、例: &lt;200ms p95、&lt;100MB メモリ、オフライン対応 または 明確化が必要]
+<strong>スケール/スコープ</strong>: [ドメイン固有、例: 10k ユーザー、1M LOC、50 画面 または 明確化が必要]</p>
+<h2>Constitution チェック</h2>
+<p><em>ゲート: フェーズ 0 リサーチの前に合格する必要があります。フェーズ 1 設計後に再確認してください。</em></p>
+<p>[Constitution ファイルに基づいて決定されたゲート]</p>
+<h2>プロジェクト構造</h2>
+<h3>ドキュメント（この機能）</h3>
+<pre><code class="language-text">specs/[###-feature]/
+├── plan.md              # このファイル (/speckit.plan コマンド出力)
+├── research.md          # フェーズ 0 出力 (/speckit.plan コマンド)
+├── data-model.md        # フェーズ 1 出力 (/speckit.plan コマンド)
+├── quickstart.md        # フェーズ 1 出力 (/speckit.plan コマンド)
+├── contracts/           # フェーズ 1 出力 (/speckit.plan コマンド)
+└── tasks.md             # フェーズ 2 出力 (/speckit.tasks コマンド - /speckit.plan では作成されません)
+</code></pre>
+<h3>ソースコード（リポジトリルート）</h3>
+<!--
+  アクション必須: 以下のプレースホルダーツリーを、この機能の具体的なレイアウトに置き換えてください。
+  使用しないオプションを削除し、選択した構造を実際のパス（例: apps/admin、packages/something）で展開してください。
+  提供される計画には、オプションラベルを含めないでください。
+-->
+
+<pre><code class="language-text"># [未使用の場合は削除] オプション 1: 単一プロジェクト（デフォルト）
+src/
+├── models/
+├── services/
+├── cli/
+└── lib/
+
+tests/
+├── contract/
+├── integration/
+└── unit/
+
+# [未使用の場合は削除] オプション 2: Web アプリケーション（「frontend」+「backend」が検出された場合）
+backend/
+├── src/
+│   ├── models/
+│   ├── services/
+│   └── api/
+└── tests/
+
+frontend/
+├── src/
+│   ├── components/
+│   ├── pages/
+│   └── services/
+└── tests/
+
+# [未使用の場合は削除] オプション 3: モバイル + API（「iOS/Android」が検出された場合）
+api/
+└── [上記のバックエンドと同じ]
+
+ios/ または android/
+└── [プラットフォーム固有の構造: 機能モジュール、UI フロー、プラットフォームテスト]
+</code></pre>
+<p><strong>構造の決定</strong>: [選択した構造を文書化し、上記でキャプチャした実際のディレクトリを参照]</p>
+<h2>複雑性の追跡</h2>
+<blockquote>
+<p><strong>Constitution チェックで違反があり、正当化が必要な場合のみ記入</strong></p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th>違反</th>
+<th>必要な理由</th>
+<th>拒否されたよりシンプルな代替案とその理由</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>[例: 4つ目のプロジェクト]</td>
+<td>[現在の必要性]</td>
+<td>[3つのプロジェクトでは不十分な理由]</td>
+</tr>
+<tr>
+<td>[例: リポジトリパターン]</td>
+<td>[特定の問題]</td>
+<td>[直接的な DB アクセスでは不十分な理由]</td>
+</tr>
+</tbody></table>
+
+  </div>
+</body>
+</html>

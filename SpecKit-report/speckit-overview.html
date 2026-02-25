@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SpecKit 概要ガイド</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>SpecKit 概要ガイド</h1>
+    </header>
+    <h1>SpecKit 概要ガイド</h1>
+<p><strong>作成日</strong>: 2026-02-14
+<strong>対象</strong>: ProjectELU における SpecKit の理解</p>
+<hr>
+<h2>目次</h2>
+<ol>
+<li><a href="#speckit-%E3%81%A8%E3%81%AF">SpecKit とは</a></li>
+<li><a href="#%E3%83%87%E3%82%A3%E3%83%AC%E3%82%AF%E3%83%88%E3%83%AA%E6%A7%8B%E9%80%A0">ディレクトリ構造</a></li>
+<li><a href="#%E4%B8%BB%E8%A6%81%E3%82%B3%E3%83%B3%E3%83%9D%E3%83%BC%E3%83%8D%E3%83%B3%E3%83%88">主要コンポーネント</a></li>
+<li><a href="#%E3%83%AF%E3%83%BC%E3%82%AF%E3%83%95%E3%83%AD%E3%83%BC">ワークフロー</a></li>
+<li><a href="#%E3%82%B9%E3%82%AD%E3%83%AB%E3%82%B3%E3%83%9E%E3%83%B3%E3%83%89">スキルコマンド</a></li>
+<li><a href="#constitution%E6%86%B2%E7%AB%A0">Constitution（憲章）</a></li>
+</ol>
+<hr>
+<h2>SpecKit とは</h2>
+<p>SpecKit は、<strong>仕様駆動開発（Spec-Driven Development）</strong> を実現するためのツールキットです。GitHub の SpecKit プロジェクトからインストールされ、AI エージェント（Claude Code など）と連携して、ソフトウェア開発の計画・仕様作成・タスク生成・実装を体系的に進めることができます。</p>
+<h3>主な特徴</h3>
+<ul>
+<li><strong>ドキュメントファースト</strong>: コードを書く前に、必ず仕様書と計画書を作成</li>
+<li><strong>段階的な開発</strong>: 仕様 → 計画 → タスク → 実装という明確なフェーズ</li>
+<li><strong>AI エージェント対応</strong>: Claude Code、Gemini、Copilot など複数の AI ツールに対応</li>
+<li><strong>テンプレートベース</strong>: 一貫性のあるドキュメント構造を維持</li>
+<li><strong>バージョン管理統合</strong>: Git ブランチと連動した機能管理</li>
+</ul>
+<hr>
+<h2>ディレクトリ構造</h2>
+<pre><code>.specify/
+├── scripts/
+│   └── bash/
+│       ├── common.sh                    # 共通関数とユーティリティ
+│       ├── check-prerequisites.sh       # 前提条件チェック
+│       ├── create-new-feature.sh        # 新規機能ブランチ作成
+│       ├── setup-plan.sh                # 計画ファイルのセットアップ
+│       └── update-agent-context.sh      # AI エージェント向けコンテキスト更新
+├── templates/
+│   ├── spec-template.md                 # 機能仕様テンプレート
+│   ├── plan-template.md                 # 実装計画テンプレート
+│   ├── tasks-template.md                # タスクリストテンプレート
+│   ├── checklist-template.md            # チェックリストテンプレート
+│   └── agent-file-template.md           # AI エージェント設定ファイルテンプレート
+└── memory/
+    └── constitution.md                  # プロジェクト憲章（開発原則）
+</code></pre>
+<hr>
+<h2>主要コンポーネント</h2>
+<h3>1. <strong>テンプレート</strong> (<code>templates/</code>)</h3>
+<p>SpecKit の核となるドキュメントテンプレート集です。</p>
+<h4><code>spec-template.md</code> - 機能仕様テンプレート</h4>
+<ul>
+<li><strong>目的</strong>: 新機能の要件定義と受け入れ基準を記述</li>
+<li><strong>内容</strong>:<ul>
+<li>ユーザーストーリー（優先度付き）</li>
+<li>受け入れ基準（Given-When-Then 形式）</li>
+<li>機能要件（FR-001、FR-002...）</li>
+<li>成功基準（測定可能な指標）</li>
+<li>エッジケース</li>
+</ul>
+</li>
+</ul>
+<h4><code>plan-template.md</code> - 実装計画テンプレート</h4>
+<ul>
+<li><strong>目的</strong>: 技術的なアプローチと実装戦略を記述</li>
+<li><strong>内容</strong>:<ul>
+<li>技術スタック（言語、フレームワーク、DB）</li>
+<li>プロジェクト構造（ディレクトリレイアウト）</li>
+<li>Constitution チェック（開発原則への準拠確認）</li>
+<li>複雑性の追跡と正当化</li>
+</ul>
+</li>
+</ul>
+<h4><code>tasks-template.md</code> - タスクリストテンプレート</h4>
+<ul>
+<li><strong>目的</strong>: 実装を具体的なタスクに分解</li>
+<li><strong>内容</strong>:<ul>
+<li>フェーズ分け（Setup → Foundational → User Stories → Polish）</li>
+<li>タスク ID と説明</li>
+<li>並列実行可能なタスクのマーキング（[P]）</li>
+<li>ユーザーストーリーごとのタスクグループ化</li>
+<li>依存関係の明示</li>
+</ul>
+</li>
+</ul>
+<h4><code>checklist-template.md</code> - チェックリストテンプレート</h4>
+<ul>
+<li><strong>目的</strong>: レビューや検証のためのカスタムチェックリスト</li>
+<li><strong>内容</strong>:<ul>
+<li>カテゴリ別チェック項目</li>
+<li>チェックボックス形式</li>
+</ul>
+</li>
+</ul>
+<h4><code>agent-file-template.md</code> - AI エージェント設定ファイルテンプレート</h4>
+<ul>
+<li><strong>目的</strong>: AI エージェント向けのプロジェクトコンテキスト提供</li>
+<li><strong>内容</strong>:<ul>
+<li>アクティブな技術スタック</li>
+<li>プロジェクト構造</li>
+<li>コマンド（テスト、ビルド、lint など）</li>
+<li>コーディング規約</li>
+<li>最近の変更履歴</li>
+</ul>
+</li>
+</ul>
+<h3>2. <strong>スクリプト</strong> (<code>scripts/bash/</code>)</h3>
+<p>SpecKit ワークフローを自動化する Bash スクリプト集です。</p>
+<h4><code>common.sh</code> - 共通関数ライブラリ</h4>
+<ul>
+<li>リポジトリルートの取得</li>
+<li>現在のブランチ/機能の特定</li>
+<li>Git/非 Git 環境の判定</li>
+<li>フィーチャーディレクトリのパス生成</li>
+<li>ファイル/ディレクトリ存在確認</li>
+</ul>
+<h4><code>create-new-feature.sh</code> - 新規機能の初期化</h4>
+<ul>
+<li><strong>機能</strong>:<ul>
+<li>機能番号の自動採番（001、002...）</li>
+<li>ブランチ名の生成とクリーニング</li>
+<li>Git ブランチの作成（<code>###-feature-name</code> 形式）</li>
+<li><code>specs/###-feature-name/</code> ディレクトリの作成</li>
+<li><code>spec.md</code> の初期化</li>
+</ul>
+</li>
+</ul>
+<h4><code>setup-plan.sh</code> - 計画フェーズの準備</h4>
+<ul>
+<li><strong>機能</strong>:<ul>
+<li><code>plan.md</code> ファイルの作成</li>
+<li>テンプレートのコピー</li>
+<li>環境変数の設定</li>
+</ul>
+</li>
+</ul>
+<h4><code>check-prerequisites.sh</code> - 前提条件チェック</h4>
+<ul>
+<li><strong>機能</strong>:<ul>
+<li>機能ディレクトリの存在確認</li>
+<li>必須ファイル（<code>plan.md</code>、<code>tasks.md</code>）の確認</li>
+<li>利用可能なドキュメントのリストアップ</li>
+<li>JSON/テキスト形式での出力対応</li>
+</ul>
+</li>
+</ul>
+<h4><code>update-agent-context.sh</code> - AI エージェントコンテキスト更新</h4>
+<ul>
+<li><strong>機能</strong>:<ul>
+<li><code>plan.md</code> から技術情報を抽出</li>
+<li><code>CLAUDE.md</code> や <code>GEMINI.md</code> などのエージェントファイルを更新</li>
+<li>プロジェクト構造、コマンド、技術スタックを自動反映</li>
+<li>複数の AI エージェントに対応（Claude、Gemini、Copilot、Cursor など）</li>
+</ul>
+</li>
+</ul>
+<h3>3. <strong>Constitution（憲章）</strong> (<code>memory/constitution.md</code>)</h3>
+<p>プロジェクト全体の開発原則と品質基準を定義したドキュメントです。</p>
+<p><strong>主要な原則</strong>:</p>
+<ul>
+<li><strong>ドキュメントファースト開発</strong>: 実装前に必ず仕様書を作成</li>
+<li><strong>モジュラーアーキテクチャ</strong>: 疎結合で責任が明確なモジュール設計</li>
+<li><strong>テストによる品質保証</strong>: 自動テストで品質を検証</li>
+<li><strong>ユーザー体験重視</strong>: エンドユーザーを中心とした設計</li>
+<li><strong>コード品質基準</strong>: Lint、明確な関数シグネチャ、エラーハンドリング</li>
+</ul>
+<p><strong>バージョン管理</strong>: セマンティックバージョニングで変更を追跡</p>
+<hr>
+<h2>ワークフロー</h2>
+<p>SpecKit は以下の段階的なワークフローを推奨します。</p>
+<pre><code>1. 仕様作成 (/speckit.specify)
+   ↓
+2. 要件明確化 (/speckit.clarify) ※必要に応じて
+   ↓
+3. 実装計画 (/speckit.plan)
+   ↓
+4. タスク生成 (/speckit.tasks)
+   ↓
+5. 実装実行 (/speckit.implement)
+   ↓
+6. 分析とレビュー (/speckit.analyze)
+</code></pre>
+<h3>各フェーズの詳細</h3>
+<h4>1. <strong>仕様作成</strong> (<code>/speckit.specify</code>)</h4>
+<ul>
+<li>自然言語の機能説明から <code>spec.md</code> を生成</li>
+<li>ユーザーストーリー、機能要件、成功基準を定義</li>
+<li>独立してテスト可能なストーリーに分割（MVP アプローチ）</li>
+</ul>
+<h4>2. <strong>要件明確化</strong> (<code>/speckit.clarify</code>)</h4>
+<ul>
+<li>仕様書の曖昧な部分を特定</li>
+<li>最大 5 つの質問で要件を明確化</li>
+<li>回答を仕様書に反映</li>
+</ul>
+<h4>3. <strong>実装計画</strong> (<code>/speckit.plan</code>)</h4>
+<ul>
+<li>技術スタック選定</li>
+<li>プロジェクト構造の決定</li>
+<li>Constitution チェック（開発原則への準拠確認）</li>
+<li>設計ドキュメント生成（research.md、data-model.md、contracts/ など）</li>
+</ul>
+<h4>4. <strong>タスク生成</strong> (<code>/speckit.tasks</code>)</h4>
+<ul>
+<li>ユーザーストーリーを実装可能なタスクに分解</li>
+<li>フェーズとタスクID で構造化</li>
+<li>依存関係と並列実行可能性を明示</li>
+<li><code>tasks.md</code> ファイルを生成</li>
+</ul>
+<h4>5. <strong>実装実行</strong> (<code>/speckit.implement</code>)</h4>
+<ul>
+<li><code>tasks.md</code> に基づいて実装を進行</li>
+<li>チェックボックスでタスク完了を追跡</li>
+<li>各フェーズごとに検証ポイント設定</li>
+</ul>
+<h4>6. <strong>分析とレビュー</strong> (<code>/speckit.analyze</code>)</h4>
+<ul>
+<li>成果物の一貫性チェック</li>
+<li>品質分析レポート生成</li>
+<li>改善提案の提示</li>
+</ul>
+<hr>
+<h2>スキルコマンド</h2>
+<p>SpecKit は Claude Code のスキルシステムと統合されています。以下のコマンドが利用可能です。</p>
+<table>
+<thead>
+<tr>
+<th>コマンド</th>
+<th>説明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>/speckit.specify</code></td>
+<td>機能仕様の作成・更新</td>
+</tr>
+<tr>
+<td><code>/speckit.clarify</code></td>
+<td>仕様の曖昧な部分を質問で明確化</td>
+</tr>
+<tr>
+<td><code>/speckit.plan</code></td>
+<td>実装計画の作成（技術選定、設計）</td>
+</tr>
+<tr>
+<td><code>/speckit.tasks</code></td>
+<td>タスクリストの生成</td>
+</tr>
+<tr>
+<td><code>/speckit.implement</code></td>
+<td>タスクの実装実行</td>
+</tr>
+<tr>
+<td><code>/speckit.analyze</code></td>
+<td>成果物の整合性分析</td>
+</tr>
+<tr>
+<td><code>/speckit.checklist</code></td>
+<td>カスタムチェックリスト生成</td>
+</tr>
+<tr>
+<td><code>/speckit.constitution</code></td>
+<td>プロジェクト憲章の作成・更新</td>
+</tr>
+<tr>
+<td><code>/speckit.taskstoissues</code></td>
+<td>タスクを GitHub Issue に変換</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>Constitution（憲章）</h2>
+<p>Constitution は、プロジェクトの開発哲学と品質基準を定義する「契約書」です。</p>
+<h3>主要な3原則</h3>
+<ol>
+<li><p><strong>Documentation-First Development（ドキュメントファースト開発）</strong></p>
+<ul>
+<li>コード実装前に仕様書を作成</li>
+<li>API 契約とデータモデルを設計段階で文書化</li>
+<li>ドキュメントは成果物の一部</li>
+</ul>
+</li>
+<li><p><strong>Modular Architecture &amp; Simplicity（モジュラーアーキテクチャとシンプルさ）</strong></p>
+<ul>
+<li>単一責任の原則</li>
+<li>最小限の依存関係</li>
+<li>YAGNI 原則（必要になるまで実装しない）</li>
+<li>シンプルな解決策を優先</li>
+</ul>
+</li>
+<li><p><strong>Quality Through Testing（テストによる品質保証）</strong></p>
+<ul>
+<li>公開インターフェースに対する契約テスト</li>
+<li>統合ポイントのテスト</li>
+<li>決定論的で独立したテスト</li>
+</ul>
+</li>
+</ol>
+<h3>品質ゲート</h3>
+<ul>
+<li><strong>実装前ゲート</strong>: 仕様承認、技術アプローチ文書化、ユーザーシナリオ定義</li>
+<li><strong>マージ前ゲート</strong>: 全テスト合格、ドキュメント更新、コードレビュー完了</li>
+</ul>
+<h3>バージョン管理</h3>
+<p>Constitution はセマンティックバージョニングで管理されます。</p>
+<ul>
+<li><strong>MAJOR</strong>: 原則の削除や非互換な再定義</li>
+<li><strong>MINOR</strong>: 新原則の追加や実質的な拡張</li>
+<li><strong>PATCH</strong>: 明確化や非意味的な改善</li>
+</ul>
+<hr>
+<h2>まとめ</h2>
+<p>SpecKit は、<strong>仕様駆動開発</strong>を体系化し、AI エージェントと人間が協力して高品質なソフトウェアを構築するためのフレームワークです。テンプレート、スクリプト、憲章の3つの柱により、以下を実現します。</p>
+<ul>
+<li><strong>一貫性</strong>: 統一されたドキュメント構造</li>
+<li><strong>追跡可能性</strong>: 要件からタスクまでの明確なトレーサビリティ</li>
+<li><strong>品質</strong>: 原則とゲートによる品質担保</li>
+<li><strong>効率</strong>: 自動化されたワークフローと AI 連携</li>
+</ul>
+<p>このガイドが、ProjectELU における SpecKit の活用に役立つことを願っています。</p>
+
+  </div>
+</body>
+</html>
