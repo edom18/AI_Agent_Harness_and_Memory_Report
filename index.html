@@ -5,130 +5,84 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Agent Architecture & Behavior Analysis</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 2rem;
-        }
-
-        h1,
-        h2,
-        h3 {
-            color: #2c3e50;
-        }
-
-        h1 {
-            border-bottom: 2px solid #eaecef;
-            padding-bottom: 0.5rem;
-        }
-
-        h2 {
-            margin-top: 2rem;
-            border-bottom: 1px solid #eaecef;
-            padding-bottom: 0.3rem;
-        }
-
-        ul {
-            list-style-type: none;
-            padding-left: 0;
-        }
-
-        li {
-            margin-bottom: 0.8rem;
-        }
-
-        a {
-            color: #0366d6;
-            text-decoration: none;
-            font-weight: 500;
-        }
-
-        a:hover {
-            text-decoration: underline;
-        }
-
-        .description {
-            color: #586069;
-            font-size: 0.9em;
-            margin-left: 1rem;
-            display: block;
-        }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
-    <h1>AI Agent Architecture &amp; Behavior Analysis</h1>
-    <p>このプロジェクトは、AIエージェントの内部挙動、アーキテクチャ、および設計パターン（ハーネスフレームワーク、メモリ戦略、自己成長メカニズムなど）を広範に調査・分析し、実践的な知見としてまとめるためのリポジトリです。</p>
+    <div class="container">
+        <header>
+            <h1>AI Agent Architecture &amp; Behavior Analysis</h1>
+            <p class="subtitle">
+                このプロジェクトは、AIエージェントの内部挙動、アーキテクチャ、および設計パターン（ハーネスフレームワーク、メモリ戦略、自己成長メカニズムなど）を広範に調査・分析し、実践的な知見としてまとめるためのリポジトリです。
+            </p>
+        </header>
 
-    <!-- Architecture Overview -->
-    <h2>Architecture Overview</h2>
-    <p>特定のエージェント実装や一般的なアーキテクチャにおける、基本的な動作原理、起動プロセス、全体の処理フローなどを俯瞰する概説ドキュメントです。</p>
-    <ul>
-        <li>
-            <a href="architecture_overview/startup_sequence.md">startup_sequence.md</a>
-            <span class="description">CLIのエントリーポイントからエージェントが初期化されるまでの詳細な起動シーケンス。</span>
-        </li>
-        <li>
-            <a href="architecture_overview/conversation_flow.md">conversation_flow.md</a>
-            <span class="description">ユーザー入力からLLMによる推論、ツール実行、応答生成までのターンベースの処理フロー。</span>
-        </li>
-        <li>
-            <a href="architecture_overview/agents_md_meta_prompt_jp.md">agents_md_meta_prompt_jp.md</a>
-            <span class="description">AGENTS.md ファイルがどのように「メタプロンプト」として機能し、動的にコンテキストを構築するかについての解説。（英語版: <a
-                    href="architecture_overview/agents_md_meta_prompt.md">agents_md_meta_prompt.md</a>）</span>
-        </li>
-        <li>
-            <a href="architecture_overview/system_prompt.md">system_prompt.md</a>
-            <span class="description">システムプロンプトの構築ロジックとインジェクションの仕組み。</span>
-        </li>
-    </ul>
+        <!-- Architecture Overview -->
+        <h2>Architecture Overview</h2>
+        <p>特定のエージェント実装や一般的なアーキテクチャにおける、基本的な動作原理、起動プロセス、全体の処理フローなどを俯瞰する概説ドキュメントです。</p>
+        <ul>
+            <li>
+                <a href="architecture_overview/startup_sequence.md">startup_sequence.md</a>
+                <span class="description">CLIのエントリーポイントからエージェントが初期化されるまでの詳細な起動シーケンス。</span>
+            </li>
+            <li>
+                <a href="architecture_overview/conversation_flow.md">conversation_flow.md</a>
+                <span class="description">ユーザー入力からLLMによる推論、ツール実行、応答生成までのターンベースの処理フロー。</span>
+            </li>
+            <li>
+                <a href="architecture_overview/agents_md_meta_prompt_jp.md">agents_md_meta_prompt_jp.md</a>
+                <span class="description">AGENTS.md ファイルがどのように「メタプロンプト」として機能し、動的にコンテキストを構築するかについての解説。（英語版: <a
+                        href="architecture_overview/agents_md_meta_prompt.md">agents_md_meta_prompt.md</a>）</span>
+            </li>
+            <li>
+                <a href="architecture_overview/system_prompt.md">system_prompt.md</a>
+                <span class="description">システムプロンプトの構築ロジックとインジェクションの仕組み。</span>
+            </li>
+        </ul>
 
-    <!-- Analysis Reports -->
-    <h2>Analysis Reports</h2>
-    <p>特定の機能的サブシステム（メモリ戦略やハーネス構造など）に焦点を当て、その仕組みやメリット・デメリットを深く掘り下げた技術分析レポートです。</p>
-    <ul>
-        <li>
-            <a href="analysis-reports/01-memory-strategy.md">01-memory-strategy.md</a>
-            <span class="description">4層メモリ構造（セッション、トランスクリプト、ベクトルインデックス、コンパクション）の分析。</span>
-        </li>
-        <li>
-            <a href="analysis-reports/02-harness-framework.md">02-harness-framework.md</a>
-            <span class="description">テストおよび検証のためのハーネスフレームワークの構造と使用法。</span>
-        </li>
-        <li>
-            <a href="analysis-reports/03-self-growth-mechanisms.md">03-self-growth-mechanisms.md</a>
-            <span class="description">エージェントが経験を通じて自己改善・学習するためのメカニズムの調査。</span>
-        </li>
-    </ul>
+        <!-- Analysis Reports -->
+        <h2>Analysis Reports</h2>
+        <p>特定の機能的サブシステム（メモリ戦略やハーネス構造など）に焦点を当て、その仕組みやメリット・デメリットを深く掘り下げた技術分析レポートです。</p>
+        <ul>
+            <li>
+                <a href="analysis-reports/01-memory-strategy.md">01-memory-strategy.md</a>
+                <span class="description">4層メモリ構造（セッション、トランスクリプト、ベクトルインデックス、コンパクション）の分析。</span>
+            </li>
+            <li>
+                <a href="analysis-reports/02-harness-framework.md">02-harness-framework.md</a>
+                <span class="description">テストおよび検証のためのハーネスフレームワークの構造と使用法。</span>
+            </li>
+            <li>
+                <a href="analysis-reports/03-self-growth-mechanisms.md">03-self-growth-mechanisms.md</a>
+                <span class="description">エージェントが経験を通じて自己改善・学習するためのメカニズムの調査。</span>
+            </li>
+        </ul>
 
-    <!-- Entry Point Analysis -->
-    <h2>Entry Point Analysis (Interactive HTML Reports)</h2>
-    <p>システムのエントリーポイントや主要コンポーネントを対話的に閲覧できるHTML形式のレポートです。</p>
-    <ul>
-        <li>
-            <a href="entry-point-analysis/index.html">Entry Point Analysis Index</a>
-            <span class="description">ソースコードレベルの機能分析と実行プロセスのインタラクティブレポート一覧。</span>
-        </li>
-    </ul>
+        <!-- Entry Point Analysis -->
+        <h2>Entry Point Analysis (Interactive HTML Reports)</h2>
+        <p>システムのエントリーポイントや主要コンポーネントを対話的に閲覧できるHTML形式のレポートです。</p>
+        <ul>
+            <li>
+                <a href="entry-point-analysis/index.html">Entry Point Analysis Index</a>
+                <span class="description">ソースコードレベルの機能分析と実行プロセスのインタラクティブレポート一覧。</span>
+            </li>
+        </ul>
 
-    <!-- SpecKit Reports -->
-    <h2>SpecKit Reports</h2>
-    <p>SpecKitフレームワークに関するマニュアル、テンプレート、スクリプトガイドなどのドキュメント群です。</p>
-    <ul>
-        <li>
-            <a href="SpecKit-report/index.html">SpecKit Report Index</a>
-            <span class="description">SpecKitドキュメントのHTML変換版へのインデックスページ。</span>
-        </li>
-    </ul>
+        <!-- SpecKit Reports -->
+        <h2>SpecKit Reports</h2>
+        <p>SpecKitフレームワークに関するマニュアル、テンプレート、スクリプトガイドなどのドキュメント群です。</p>
+        <ul>
+            <li>
+                <a href="SpecKit-report/index.html">SpecKit Report Index</a>
+                <span class="description">SpecKitドキュメントのHTML変換版へのインデックスページ。</span>
+            </li>
+        </ul>
 
-    <hr style="margin-top: 3rem; border: none; border-top: 1px solid #eaecef;">
-    <p style="text-align: center; color: #586069; font-size: 0.9em;">
-        <em>Generated and Maintained for AI Agent Research</em>
-    </p>
+        <hr style="margin-top: 3rem; border: none; border-top: 1px solid var(--border);">
+        <p style="text-align: center; color: var(--text-secondary); font-size: 0.9em;">
+            <em>Generated and Maintained for AI Agent Research</em>
+        </p>
+    </div>
 </body>
 
 </html>
